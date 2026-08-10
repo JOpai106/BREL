@@ -1,0 +1,26 @@
+{
+  "name": "Brel Monitoring",
+  "short_name": "Brel",
+  "description": "Système de suivi et maintenance technique Brel Energie",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#2185D0",
+  "icons": [
+    {
+      "src": "https://ais-dev-sxdeqq3hg7yedhmkfn3efe-128614075527.europe-west2.run.app/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "https://picsum.photos/seed/brel/192/192",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://picsum.photos/seed/brel/512/512",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}

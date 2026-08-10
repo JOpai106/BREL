@@ -1,0 +1,5 @@
+{
+  "name": "BREL MONITOR A1",
+  "description": "Application professionnelle de suivi de maintenance des groupes électrogènes pour Brel Energie. Notre expertise, votre solution.",
+  "requestFramePermissions": ["geolocation"]
+}

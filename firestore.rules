@@ -1,0 +1,181 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (UID)
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required)
+    //   - displayName: string (optional)
+    //   - role: string (required, enum: ['admin', 'technician', 'client'])
+    //
+    // Collection: records
+    // Document ID: recordId (UUID)
+    // Fields:
+    //   - id: string (required)
+    //   - customerName: string (required)
+    //   - model: string (required)
+    //   - currentIndex: number (required)
+    //   - lastUpdateDate: timestamp/string (required)
+    //   - interventions: list (required)
+    //   - createdBy: string (required)
+    //
+    // Collection: stock
+    // Document ID: itemId (UUID)
+    // Fields:
+    //   - id: string (required)
+    //   - name: string (required)
+    //   - quantity: number (required)
+    //   - category: string (required)
+    //   - createdBy: string (required)
+    //
+    // Collection: archives
+    // Document ID: docId (UUID)
+    // Fields:
+    //   - id: string (required)
+    //   - docNumber: string (required)
+    //   - type: string (required)
+    //   - date: string (required)
+    //   - customerName: string (required)
+    //   - totalAmount: number (required)
+    //   - createdBy: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (request.auth.token.email == "juniorobindi@gmail.com" || 
+         request.auth.token.email == "juniorobindi@gmail.com" ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
+    function isTechnician() {
+      return isAuthenticated() &&
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'technician');
+    }
+
+    function isClient() {
+      return isAuthenticated() &&
+        (!exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'client');
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function validString(field, min, max) {
+      return request.resource.data[field] is string && 
+             request.resource.data[field].size() >= min && 
+             request.resource.data[field].size() <= max;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email', 'role']) &&
+             isValidEmail(data.email) &&
+             data.role in ['admin', 'technician', 'client'];
+    }
+
+    function isValidRecord(data) {
+      return hasRequiredFields(['id', 'customerName', 'model', 'currentIndex', 'lastUpdateDate']) &&
+             data.id is string &&
+             data.customerName is string && data.customerName.size() < 200 &&
+             data.model is string && data.model.size() < 100 &&
+             data.currentIndex is number;
+    }
+
+    function isValidStock(data) {
+      return hasRequiredFields(['id', 'name', 'quantity', 'category']) &&
+             data.id is string &&
+             data.name is string && data.name.size() < 200 &&
+             data.quantity is number &&
+             data.category is string;
+    }
+
+    function isValidArchive(data) {
+      return hasRequiredFields(['id', 'docNumber', 'type', 'date', 'customerName', 'totalAmount']) &&
+             data.id is string &&
+             data.docNumber is string &&
+             data.type in ['quote', 'invoice'] &&
+             data.customerName is string &&
+             data.totalAmount is number;
+    }
+
+    function isValidNotification(data) {
+      return hasRequiredFields(['id', 'userId', 'title', 'message', 'type', 'date', 'isRead']) &&
+             data.id is string &&
+             data.userId is string &&
+             data.title is string && data.title.size() < 100 &&
+             data.message is string && data.message.size() < 500 &&
+             data.type in ['intervention', 'maintenance_approaching', 'alert'] &&
+             data.date is string &&
+             data.isRead is bool;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    match /records/{recordId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated();
+    }
+
+    match /stock/{itemId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated();
+    }
+
+    match /archives/{docId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated();
+    }
+
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

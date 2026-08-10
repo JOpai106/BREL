@@ -1,0 +1,122 @@
+{
+  "entities": {
+    "MaintenanceRecord": {
+      "title": "MaintenanceRecord",
+      "description": "A record of a machine and its maintenance history",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerName": { "type": "string" },
+        "site": { "type": "string" },
+        "model": { "type": "string" },
+        "capacity": { "type": "string" },
+        "oilFilterRef": { "type": "string" },
+        "fuelFilterRef": { "type": "string" },
+        "airFilterRef": { "type": "string" },
+        "oilRef": { "type": "string" },
+        "lastChangeIndex": { "type": "number" },
+        "lastChangeDate": { "type": "string" },
+        "nextChangeIndex": { "type": "number" },
+        "lastBeltChangeIndex": { "type": "number" },
+        "nextBeltChangeIndex": { "type": "number" },
+        "beltRef": { "type": "string" },
+        "currentIndex": { "type": "number" },
+        "dailyHours": { "type": "number" },
+        "lastUpdateDate": { "type": "string" },
+        "interventions": {
+          "type": "array",
+          "items": { "$ref": "Intervention" }
+        },
+        "oilQuantity": { "type": "number" },
+        "oilPrice": { "type": "number" },
+        "oilFilterPrice": { "type": "number" },
+        "fuelFilterPrice": { "type": "number" },
+        "airFilterPrice": { "type": "number" },
+        "laborPrice": { "type": "number" },
+        "airFilterPrice2": { "type": "number" },
+        "beltPrice": { "type": "number" },
+        "createdBy": { "type": "string", "description": "UID of the user who created this record" }
+      },
+      "required": ["id", "customerName", "model", "currentIndex", "lastUpdateDate"]
+    },
+    "Intervention": {
+      "title": "Intervention",
+      "description": "A single maintenance action",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "index": { "type": "number" },
+        "type": { "type": "string" },
+        "details": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "signatureUrl": { "type": "string" }
+      },
+      "required": ["id", "date", "index", "type"]
+    },
+    "StockItem": {
+      "title": "StockItem",
+      "description": "An item in the inventory",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "quantity": { "type": "number" },
+        "minQuantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "category": { "type": "string" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "name", "quantity", "category"]
+    },
+    "ArchivedDocument": {
+      "title": "ArchivedDocument",
+      "description": "A generated quote or invoice",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "docNumber": { "type": "string" },
+        "type": { "type": "string" },
+        "date": { "type": "string" },
+        "customerName": { "type": "string" },
+        "model": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "recordSnapshot": { "$ref": "MaintenanceRecord" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "docNumber", "type", "date", "customerName", "totalAmount"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "technician", "client"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/records/{recordId}": {
+      "schema": "MaintenanceRecord",
+      "description": "Collection of maintenance records"
+    },
+    "/stock/{itemId}": {
+      "schema": "StockItem",
+      "description": "Collection of stock items"
+    },
+    "/archives/{docId}": {
+      "schema": "ArchivedDocument",
+      "description": "Collection of archived documents"
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles"
+    }
+  }
+}
