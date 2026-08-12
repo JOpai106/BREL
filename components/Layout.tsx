@@ -17,6 +17,40 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user, appUser, onLogout, notifications = [], onMarkAsRead = () => {} }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [isThemeMenuOpen, setIsThemeMenuOpen] = React.useState(false);
+  
+  // Theme and Brightness state persisted in localStorage
+  const [themeMode, setThemeMode] = React.useState<'normal' | 'soft' | 'contrast' | 'dark'>(() => {
+    return (localStorage.getItem('brel_theme_mode') as any) || 'normal';
+  });
+  const [brightness, setBrightness] = React.useState<number>(() => {
+    const saved = localStorage.getItem('brel_brightness');
+    return saved ? Number(saved) : 100;
+  });
+
+  const handleSetThemeMode = (mode: 'normal' | 'soft' | 'contrast' | 'dark') => {
+    setThemeMode(mode);
+    localStorage.setItem('brel_theme_mode', mode);
+    if (mode === 'dark') {
+      setBrightness(85);
+      localStorage.setItem('brel_brightness', '85');
+    } else if (mode === 'soft') {
+      setBrightness(92);
+      localStorage.setItem('brel_brightness', '92');
+    } else if (mode === 'contrast') {
+      setBrightness(105);
+      localStorage.setItem('brel_brightness', '105');
+    } else {
+      setBrightness(100);
+      localStorage.setItem('brel_brightness', '100');
+    }
+  };
+
+  const handleBrightnessChange = (val: number) => {
+    setBrightness(val);
+    localStorage.setItem('brel_brightness', val.toString());
+  };
+
   const isAdmin = appUser?.role === 'admin';
   const isTechnician = appUser?.role === 'technician';
   const isClient = appUser?.role === 'client';
@@ -47,7 +81,20 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-['Inter'] text-[#101828]">
+    <div 
+      className={`min-h-screen font-['Inter'] transition-colors duration-300 ${
+        themeMode === 'dark' 
+          ? 'bg-[#0B1120] text-slate-100' 
+          : themeMode === 'soft' 
+          ? 'bg-[#F1F5F9] text-slate-900' 
+          : themeMode === 'contrast' 
+          ? 'bg-slate-100 text-slate-950 font-medium' 
+          : 'bg-[#F8FAFC] text-[#101828]'
+      }`}
+      style={{
+        filter: brightness !== 100 ? `brightness(${brightness}%)` : undefined
+      }}
+    >
       {/* Top Header Navigation */}
       <header className="bg-white border-b border-slate-100 px-4 md:px-8 py-3 sticky top-0 z-50 print:hidden shadow-sm">
         <div className="max-w-[1440px] mx-auto flex items-center justify-between">
@@ -98,7 +145,122 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
           </nav>
 
           {/* Contact & Action Section */}
-          <div className="flex items-center space-x-4 md:space-x-8">
+          <div className="flex items-center space-x-3 md:space-x-6">
+            {/* Brightness & Visual Theme Selector Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setIsThemeMenuOpen(!isThemeMenuOpen)}
+                className={`w-8 h-8 md:w-9 md:h-9 rounded-xl flex items-center justify-center transition-all ${
+                  isThemeMenuOpen 
+                    ? 'bg-[#2185D0] text-white shadow-md' 
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-[#2185D0]'
+                }`}
+                title="Ajuster la luminosité et le rendu visuel"
+              >
+                <i className={`fas ${brightness > 105 ? 'fa-sun text-amber-500' : brightness < 90 ? 'fa-moon text-indigo-400' : 'fa-adjust'} text-xs md:text-sm`}></i>
+              </button>
+
+              {isThemeMenuOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setIsThemeMenuOpen(false)} 
+                  />
+                  <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-slate-100 p-4 z-50 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <div className="flex items-center space-x-2">
+                        <i className="fas fa-sun text-[#2185D0] text-xs"></i>
+                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">Luminosité & Rendu</h4>
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-400">{brightness}%</span>
+                    </div>
+
+                    {/* Brightness Slider */}
+                    <div className="my-3 space-y-1.5">
+                      <div className="flex justify-between text-[9px] font-extrabold uppercase text-slate-400">
+                        <span>Doux (75%)</span>
+                        <span>Intense (120%)</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="75"
+                        max="120"
+                        step="5"
+                        value={brightness}
+                        onChange={(e) => handleBrightnessChange(Number(e.target.value))}
+                        className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-[#2185D0]"
+                      />
+                    </div>
+
+                    {/* Preset Modes */}
+                    <div className="space-y-1.5 pt-1">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Modes d'affichage :</p>
+                      
+                      <button
+                        onClick={() => handleSetThemeMode('normal')}
+                        className={`w-full flex items-center justify-between p-2 rounded-xl text-left text-xs font-bold transition-all ${
+                          themeMode === 'normal' 
+                            ? 'bg-blue-50 text-[#2185D0] border border-blue-200' 
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="flex items-center space-x-2">
+                          <i className="fas fa-desktop text-xs"></i>
+                          <span>Standard (100%)</span>
+                        </span>
+                        {themeMode === 'normal' && <i className="fas fa-check text-xs"></i>}
+                      </button>
+
+                      <button
+                        onClick={() => handleSetThemeMode('soft')}
+                        className={`w-full flex items-center justify-between p-2 rounded-xl text-left text-xs font-bold transition-all ${
+                          themeMode === 'soft' 
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200' 
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="flex items-center space-x-2">
+                          <i className="fas fa-glasses text-xs"></i>
+                          <span>Anti-Fatigue / Repos</span>
+                        </span>
+                        {themeMode === 'soft' && <i className="fas fa-check text-xs"></i>}
+                      </button>
+
+                      <button
+                        onClick={() => handleSetThemeMode('contrast')}
+                        className={`w-full flex items-center justify-between p-2 rounded-xl text-left text-xs font-bold transition-all ${
+                          themeMode === 'contrast' 
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="flex items-center space-x-2">
+                          <i className="fas fa-sun text-xs"></i>
+                          <span>Plein Soleil / Contrasté</span>
+                        </span>
+                        {themeMode === 'contrast' && <i className="fas fa-check text-xs"></i>}
+                      </button>
+
+                      <button
+                        onClick={() => handleSetThemeMode('dark')}
+                        className={`w-full flex items-center justify-between p-2 rounded-xl text-left text-xs font-bold transition-all ${
+                          themeMode === 'dark' 
+                            ? 'bg-slate-900 text-white border border-slate-700' 
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="flex items-center space-x-2">
+                          <i className="fas fa-moon text-xs"></i>
+                          <span>Mode Nuit / Sombre</span>
+                        </span>
+                        {themeMode === 'dark' && <i className="fas fa-check text-xs"></i>}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
             {user && (
               <div className="flex items-center space-x-3 md:space-x-4 border-r border-slate-100 pr-4 md:pr-8">
                 <NotificationBell notifications={notifications} onMarkAsRead={onMarkAsRead} />

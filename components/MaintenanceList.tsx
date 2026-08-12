@@ -65,7 +65,21 @@ const MaintenanceList: React.FC<Props> = ({ records, onDelete, onEdit, appUser }
                         }`}></div>
                         <div className="min-w-0">
                           <p className="font-black text-slate-900 text-xs md:text-sm uppercase italic truncate">{record.customerName}</p>
-                          <p className="text-[9px] md:text-[10px] text-slate-400 font-mono font-bold tracking-tight truncate">{record.model}</p>
+                          <div className="flex items-center space-x-2">
+                            <p className="text-[9px] md:text-[10px] text-slate-400 font-mono font-bold tracking-tight truncate">{record.model}</p>
+                            {record.clientPhone && (
+                              <a 
+                                href={`https://wa.me/${record.clientPhone.replace(/[^\d+]/g, '').replace('+', '')}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                                title="Envoyer notification WhatsApp"
+                              >
+                                <i className="fab fa-whatsapp mr-1 text-[10px]"></i>
+                                <span>{record.clientPhone}</span>
+                              </a>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </td>

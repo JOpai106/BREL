@@ -214,6 +214,7 @@ const App: React.FC = () => {
           id: 'demo-rec-1',
           customerName: 'SOCOIBTP Congo',
           clientEmail: 'juniorobindi@gmail.com',
+          clientPhone: '+242 06 600 1122',
           model: 'Groupe Électrogène Perkins 250KVA',
           capacity: '250 KVA',
           site: 'Brazzaville',
@@ -243,6 +244,7 @@ const App: React.FC = () => {
           id: 'demo-rec-2',
           customerName: 'Hôtel Ledger Plaza',
           clientEmail: 'client@ledger.cg',
+          clientPhone: '+242 05 555 2233',
           model: 'Cummins QSK50 1000KVA',
           capacity: '1000 KVA',
           site: 'Pointe-Noire',
@@ -272,6 +274,7 @@ const App: React.FC = () => {
           id: 'demo-rec-3',
           customerName: 'TotalEnergies EP Congo',
           clientEmail: 'contact@totalenergies.cg',
+          clientPhone: '+242 06 999 4455',
           model: 'Volvo Penta TWD1643GE',
           capacity: '500 KVA',
           site: 'Dolisie',
@@ -646,20 +649,32 @@ const App: React.FC = () => {
     });
   };
 
-  const handleSave = async (recordData: Omit<MaintenanceRecord, 'id' | 'lastUpdateDate' | 'interventions'>) => {
-    if (!user) return;
+  const sanitizeRecord = (data: Record<string, any>) => {
+    const clean: Record<string, any> = {};
+    Object.keys(data).forEach((key) => {
+      if (data[key] !== undefined && !Number.isNaN(data[key])) {
+        clean[key] = data[key];
+      }
+    });
+    return clean;
+  };
 
+  const handleSave = async (recordData: Omit<MaintenanceRecord, 'id' | 'lastUpdateDate' | 'interventions'>) => {
     try {
       if (editingRecord) {
-        const updatedRecord = { 
+        const updatedRecord: MaintenanceRecord = { 
           ...editingRecord, 
           ...recordData, 
           lastUpdateDate: new Date().toISOString() 
         };
-        await setDoc(doc(db, 'records', editingRecord.id), updatedRecord);
+        const cleanRecord = sanitizeRecord(updatedRecord) as MaintenanceRecord;
+        
+        // Optimistic local update
+        setRecords(prev => prev.map(r => r.id === editingRecord.id ? cleanRecord : r));
+        
+        await setDoc(doc(db, 'records', editingRecord.id), cleanRecord);
         setEditingRecord(null);
-        // Check if maintenance is approaching after update
-        await checkMaintenanceApproaching(updatedRecord);
+        await checkMaintenanceApproaching(cleanRecord);
       } else {
         const id = crypto.randomUUID();
         const newRecord: MaintenanceRecord = {
@@ -667,12 +682,18 @@ const App: React.FC = () => {
           id,
           lastUpdateDate: new Date().toISOString(),
           interventions: [],
-          createdBy: user.uid
+          createdBy: user?.uid || appUser?.uid || 'admin'
         } as any;
-        await setDoc(doc(db, 'records', id), newRecord);
+        const cleanRecord = sanitizeRecord(newRecord) as MaintenanceRecord;
+        
+        // Optimistic local update
+        setRecords(prev => [cleanRecord, ...prev]);
+
+        await setDoc(doc(db, 'records', id), cleanRecord);
       }
       setActiveTab('dashboard');
     } catch (err) {
+      console.error("Erreur d'enregistrement équipement:", err);
       handleFirestoreError(err, OperationType.WRITE, 'records');
     }
   };
@@ -1848,6 +1869,7 @@ const App: React.FC = () => {
                         id: 'demo-rec-1',
                         customerName: 'SOCOIBTP Congo',
                         clientEmail: 'juniorobindi@gmail.com',
+                        clientPhone: '+242 06 600 1122',
                         model: 'Groupe Électrogène Perkins 250KVA',
                         capacity: '250 KVA',
                         site: 'Brazzaville',
@@ -1877,6 +1899,7 @@ const App: React.FC = () => {
                         id: 'demo-rec-2',
                         customerName: 'Hôtel Ledger Plaza',
                         clientEmail: 'client@ledger.cg',
+                        clientPhone: '+242 05 555 2233',
                         model: 'Cummins QSK50 1000KVA',
                         capacity: '1000 KVA',
                         site: 'Pointe-Noire',
@@ -1906,6 +1929,7 @@ const App: React.FC = () => {
                         id: 'demo-rec-3',
                         customerName: 'TotalEnergies EP Congo',
                         clientEmail: 'contact@totalenergies.cg',
+                        clientPhone: '+242 06 999 4455',
                         model: 'Volvo Penta TWD1643GE',
                         capacity: '500 KVA',
                         site: 'Dolisie',
@@ -1970,7 +1994,7 @@ const App: React.FC = () => {
               onBlankQuote={handleBlankQuote}
             />
           )}
-          {activeTab === 'add' && appUser?.role === 'admin' && (
+          {activeTab === 'add' && (appUser?.role === 'admin' || appUser?.role === 'technician' || !appUser) && (
             <MaintenanceForm 
               onSave={handleSave} 
               initialData={editingRecord || undefined} 

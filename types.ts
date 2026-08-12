@@ -14,6 +14,7 @@ export interface MaintenanceRecord {
   id: string;
   customerName: string;
   clientEmail?: string; // Link to a client user
+  clientPhone?: string; // Client phone number for direct notifications (WhatsApp/SMS)
   site?: string;
   lat?: number;
   lng?: number;

@@ -7,6 +7,8 @@
       "properties": {
         "id": { "type": "string" },
         "customerName": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "clientPhone": { "type": "string" },
         "site": { "type": "string" },
         "model": { "type": "string" },
         "capacity": { "type": "string" },

@@ -61,6 +61,7 @@ const MaintenanceForm: React.FC<Props> = ({ onSave, initialData }) => {
   const [formData, setFormData] = useState({
     customerName: initialData?.customerName || '',
     clientEmail: initialData?.clientEmail || '',
+    clientPhone: initialData?.clientPhone || '',
     site: initialData?.site || '',
     model: initialData?.model || '',
     capacity: initialData?.capacity || '',
@@ -153,15 +154,21 @@ const MaintenanceForm: React.FC<Props> = ({ onSave, initialData }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanFormData = { ...formData };
+    if (cleanFormData.lat === undefined) delete cleanFormData.lat;
+    if (cleanFormData.lng === undefined) delete cleanFormData.lng;
+
     const finalData = {
-      ...formData,
-      clientEmail: formData.clientEmail?.toLowerCase().trim()
+      ...cleanFormData,
+      clientEmail: formData.clientEmail?.toLowerCase().trim() || '',
+      clientPhone: formData.clientPhone?.trim() || ''
     };
     onSave(finalData);
     if (!initialData) {
       setFormData({
         customerName: '',
         clientEmail: '',
+        clientPhone: '',
         site: '',
         model: '',
         capacity: '',
@@ -220,6 +227,10 @@ const MaintenanceForm: React.FC<Props> = ({ onSave, initialData }) => {
           <div>
             <label className={labelClass}>Client</label>
             <input type="text" required value={formData.customerName} onChange={(e) => setFormData({ ...formData, customerName: e.target.value })} className={inputClass} placeholder="Nom Entreprise" />
+          </div>
+          <div>
+            <label className={labelClass}>Téléphone Client (Notification)</label>
+            <input type="tel" value={formData.clientPhone} onChange={(e) => setFormData({ ...formData, clientPhone: e.target.value })} className={inputClass} placeholder="ex: +242 06 600 1122" />
           </div>
           <div>
             <label className={labelClass}>Email Client (Accès)</label>
