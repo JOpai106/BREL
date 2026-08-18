@@ -1473,9 +1473,16 @@ const App: React.FC = () => {
                         <p className="text-[9px] text-slate-400 font-bold tracking-tight mt-0.5">{new Date(int.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                       <p className="text-[9px] font-black text-emerald-500 uppercase italic">Opération Validée</p>
-                       <p className="text-[8px] text-slate-300 font-medium max-w-[150px] truncate">{int.details || 'Aucune observation'}</p>
+                    <div className="text-right flex items-center space-x-3">
+                       {int.photoUrl && (
+                         <a href={int.photoUrl} target="_blank" rel="noreferrer" title="Voir photo jointe">
+                           <img src={int.photoUrl} alt="Photo" className="w-9 h-9 object-cover rounded-xl border border-slate-200 hover:opacity-80 transition-opacity" />
+                         </a>
+                       )}
+                       <div>
+                         <p className="text-[9px] font-black text-emerald-500 uppercase italic">Opération Validée</p>
+                         <p className="text-[8px] text-slate-300 font-medium max-w-[150px] truncate">{int.details || 'Aucune observation'}</p>
+                       </div>
                     </div>
                   </div>
                 ))}

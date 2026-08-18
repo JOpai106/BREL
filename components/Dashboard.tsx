@@ -25,6 +25,11 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
   const [isSavingPhone, setIsSavingPhone] = useState(false);
   const [savedPhoneSuccess, setSavedPhoneSuccess] = useState(false);
 
+  // Photo attachment states
+  const [previewImageModal, setPreviewImageModal] = useState<{ url: string; title: string; date?: string; type?: string } | null>(null);
+  const [isCompressingPhoto, setIsCompressingPhoto] = useState(false);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'overdue' | 'urgent' | 'operational'>('all');
   const [filterLocation, setFilterLocation] = useState<string>('all');
@@ -36,6 +41,56 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
     photoUrl: '',
     signatureUrl: ''
   });
+
+  const compressPhotoFile = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_DIM = 1000;
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > MAX_DIM) {
+              height *= MAX_DIM / width;
+              width = MAX_DIM;
+            }
+          } else {
+            if (height > MAX_DIM) {
+              width *= MAX_DIM / height;
+              height = MAX_DIM;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.onerror = (err) => reject(err);
+      };
+      reader.onerror = (err) => reject(err);
+    });
+  };
+
+  const handlePhotoFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsCompressingPhoto(true);
+    try {
+      const compressedDataUrl = await compressPhotoFile(file);
+      setNewLog(prev => ({ ...prev, photoUrl: compressedDataUrl }));
+    } catch (err) {
+      console.error("Erreur lors du traitement de la photo:", err);
+      alert("Impossible de charger la photo sélectionnée.");
+    } finally {
+      setIsCompressingPhoto(false);
+    }
+  };
 
   const locations = ['Brazzaville', 'Pointe-Noire', 'Dolisie', 'Oyo', 'Ollombo', 'Owando'];
 
@@ -899,34 +954,102 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                   ></textarea>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[9px] font-black uppercase text-slate-500 mb-1.5">Photo (URL)</label>
-                    <input 
-                      type="text" 
-                      value={newLog.photoUrl} 
-                      onChange={e => setNewLog({...newLog, photoUrl: e.target.value})} 
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-[11px] font-medium focus:ring-2 focus:ring-[#2185D0]/20 focus:outline-none" 
-                      placeholder="https://..." 
-                    />
+                {/* Photo & Signature Attachments */}
+                <div className="space-y-3 bg-slate-50/80 p-4 rounded-2xl border border-slate-200/80">
+                  <div className="flex justify-between items-center">
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-700 flex items-center">
+                      <i className="fas fa-camera text-[#2185D0] mr-2 text-xs"></i>
+                      Photo de l'Intervention
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowUrlInput(!showUrlInput)}
+                      className="text-[9px] font-bold text-slate-500 hover:text-[#2185D0] underline"
+                    >
+                      {showUrlInput ? "Utiliser caméra / fichier" : "Saisir un lien URL"}
+                    </button>
                   </div>
+
+                  {!showUrlInput ? (
+                    <div>
+                      {newLog.photoUrl ? (
+                        <div className="relative group rounded-2xl overflow-hidden border-2 border-emerald-500/40 bg-white p-2 flex items-center space-x-3">
+                          <img 
+                            src={newLog.photoUrl} 
+                            alt="Aperçu photo intervention" 
+                            className="w-16 h-16 object-cover rounded-xl shadow-xs border border-slate-100 shrink-0" 
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-black text-slate-900 truncate">Photo jointe prête</p>
+                            <p className="text-[10px] text-emerald-600 font-bold flex items-center mt-0.5">
+                              <i className="fas fa-check-circle mr-1"></i> Image attachée à l'intervention
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setNewLog({ ...newLog, photoUrl: '' })}
+                            className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors shrink-0"
+                            title="Supprimer la photo"
+                          >
+                            <i className="fas fa-trash-alt text-xs"></i>
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="border-2 border-dashed border-slate-300 hover:border-[#2185D0] bg-white rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all hover:bg-blue-50/30 group">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={handlePhotoFileSelect}
+                            className="hidden"
+                          />
+                          {isCompressingPhoto ? (
+                            <div className="flex items-center space-x-2 text-[#2185D0] text-xs font-bold py-1">
+                              <i className="fas fa-spinner fa-spin text-base"></i>
+                              <span>Optimisation de la photo en cours...</span>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="w-10 h-10 rounded-full bg-blue-50 text-[#2185D0] group-hover:scale-110 flex items-center justify-center mb-1.5 transition-transform">
+                                <i className="fas fa-camera text-base"></i>
+                              </div>
+                              <span className="text-xs font-black text-slate-800">Prendre une photo ou Choisir un fichier</span>
+                              <span className="text-[10px] text-slate-400 font-medium mt-0.5">Prenez directement en photo les pièces ou le compteur</span>
+                            </>
+                          )}
+                        </label>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <input 
+                        type="text" 
+                        value={newLog.photoUrl} 
+                        onChange={e => setNewLog({...newLog, photoUrl: e.target.value})} 
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-medium focus:ring-2 focus:ring-[#2185D0]/20 focus:outline-none" 
+                        placeholder="Ex: https://domaine.com/photo.jpg" 
+                      />
+                    </div>
+                  )}
+
                   <div>
-                    <label className="block text-[9px] font-black uppercase text-slate-500 mb-1.5">Signature Client (URL)</label>
+                    <label className="block text-[9px] font-black uppercase text-slate-500 mb-1">Signature Client (URL optionnelle)</label>
                     <input 
                       type="text" 
                       value={newLog.signatureUrl} 
                       onChange={e => setNewLog({...newLog, signatureUrl: e.target.value})} 
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-[11px] font-medium focus:ring-2 focus:ring-[#2185D0]/20 focus:outline-none" 
-                      placeholder="https://..." 
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-[11px] font-medium focus:ring-2 focus:ring-[#2185D0]/20 focus:outline-none" 
+                      placeholder="Lien URL signature..." 
                     />
                   </div>
                 </div>
 
                 <button 
                   onClick={handleSaveLog} 
-                  className="w-full py-3.5 bg-[#2185D0] text-white rounded-xl font-black text-xs tracking-widest uppercase shadow-md hover:bg-[#1a6fb0] transition-all active:scale-98"
+                  className="w-full py-3.5 bg-[#2185D0] text-white rounded-xl font-black text-xs tracking-widest uppercase shadow-md hover:bg-[#1a6fb0] transition-all active:scale-98 flex items-center justify-center space-x-2"
                 >
-                  <i className="fas fa-check-circle mr-2"></i> ARCHIVER L'OPÉRATION
+                  <i className="fas fa-check-circle text-sm"></i>
+                  <span>ARCHIVER L'OPÉRATION</span>
                 </button>
               </div>
 
@@ -939,31 +1062,51 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                    </span>
                 </div>
 
-                <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
                   {(activeLogMachine.interventions || []).length > 0 ? (
                     (activeLogMachine.interventions || []).map((log) => (
-                      <div key={log.id} className="p-3.5 border border-slate-100 rounded-2xl flex items-center justify-between bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                        <div className="flex items-center space-x-3.5">
-                          <div className="w-10 h-10 bg-white rounded-xl border border-slate-200 flex items-center justify-center text-slate-800 text-xs font-black font-mono">
+                      <div key={log.id} className="p-3 border border-slate-100 rounded-2xl flex items-center justify-between bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-white rounded-xl border border-slate-200 flex items-center justify-center text-slate-800 text-xs font-black font-mono shrink-0 shadow-xs">
                             {log.index}h
                           </div>
-                          <div>
-                            <p className="text-xs font-extrabold text-slate-900 uppercase">{log.type}</p>
+                          <div className="min-w-0">
+                            <p className="text-xs font-extrabold text-slate-900 uppercase truncate">{log.type}</p>
                             <div className="flex items-center space-x-2 mt-0.5">
                               <p className="text-[10px] text-slate-500 font-bold">
                                 {new Date(log.date).toLocaleDateString('fr-FR')}
                               </p>
                               {log.details && (
-                                <span className="text-[10px] text-slate-400 truncate max-w-[150px]" title={log.details}>
+                                <span className="text-[10px] text-slate-400 truncate max-w-[140px]" title={log.details}>
                                   — {log.details}
                                 </span>
                               )}
-                              {log.photoUrl && <i className="fas fa-camera text-[10px] text-[#2185D0]" title="Photo jointe"></i>}
-                              {log.signatureUrl && <i className="fas fa-signature text-[10px] text-emerald-600" title="Signé"></i>}
                             </div>
                           </div>
                         </div>
-                        <i className="fas fa-check-circle text-emerald-500 text-sm"></i>
+
+                        {/* Photo Thumbnail or Checkmark */}
+                        <div className="flex items-center space-x-2 shrink-0">
+                          {log.photoUrl ? (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewImageModal({
+                                url: log.photoUrl!,
+                                title: `${activeLogMachine.customerName} - ${activeLogMachine.model}`,
+                                date: log.date,
+                                type: log.type
+                              })}
+                              className="relative group rounded-xl overflow-hidden border-2 border-[#2185D0]/30 hover:border-[#2185D0] shadow-xs transition-all flex items-center space-x-1.5 bg-blue-50 px-2 py-1"
+                              title="Cliquer pour agrandir la photo"
+                            >
+                              <img src={log.photoUrl} alt="Photo" className="w-7 h-7 object-cover rounded-lg" />
+                              <span className="text-[10px] font-black text-[#2185D0]">Photo</span>
+                              <i className="fas fa-search-plus text-[10px] text-[#2185D0]"></i>
+                            </button>
+                          ) : (
+                            <i className="fas fa-check-circle text-emerald-500 text-sm" title="Opération validée"></i>
+                          )}
+                        </div>
                       </div>
                     ))
                   ) : (
@@ -1185,6 +1328,65 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
 
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Full Size Photo Preview Modal */}
+      {previewImageModal && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
+              <div className="flex items-center space-x-3">
+                <div className="w-9 h-9 rounded-xl bg-[#2185D0] flex items-center justify-center text-white">
+                  <i className="fas fa-camera text-sm"></i>
+                </div>
+                <div>
+                  <h4 className="font-black text-xs md:text-sm uppercase tracking-tight">{previewImageModal.title}</h4>
+                  <p className="text-[10px] text-slate-300 font-medium">
+                    {previewImageModal.type} — {previewImageModal.date ? new Date(previewImageModal.date).toLocaleDateString('fr-FR') : 'Date non spécifiée'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setPreviewImageModal(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+              >
+                <i className="fas fa-times text-xs"></i>
+              </button>
+            </div>
+            
+            <div className="p-4 bg-slate-950 flex items-center justify-center min-h-[300px] max-h-[70vh]">
+              <img 
+                src={previewImageModal.url} 
+                alt="Photo intervention agrandie" 
+                className="max-h-[65vh] max-w-full object-contain rounded-2xl shadow-lg border border-slate-800"
+              />
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200/80 flex justify-between items-center">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                Photo d'intervention certifiée Brel Énergie
+              </span>
+              <div className="flex space-x-2">
+                <a
+                  href={previewImageModal.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-4 py-2 bg-blue-50 text-[#2185D0] hover:bg-blue-100 rounded-xl font-black text-xs uppercase tracking-wider flex items-center space-x-1.5 transition-colors"
+                >
+                  <i className="fas fa-external-link-alt text-xs"></i>
+                  <span>Ouvrir l'image</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewImageModal(null)}
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-colors"
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
