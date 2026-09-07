@@ -61,6 +61,9 @@ const App: React.FC = () => {
         setAuthError("La fenêtre de connexion a été fermée avant la fin de l'authentification.");
       } else if (err.code === 'auth/cancelled-by-user') {
         setAuthError("Connexion annulée.");
+      } else if (err.code === 'auth/unauthorized-domain') {
+        const domain = window.location.hostname;
+        setAuthError(`Domaine non autorisé (${domain}). Veuillez autoriser ce domaine dans Firebase Console > Authentication > Settings > Authorized domains.`);
       } else {
         setAuthError(err.message || "Une erreur est survenue lors de la connexion avec Google.");
       }
@@ -80,7 +83,12 @@ const App: React.FC = () => {
         await loginWithEmail(email, password);
       }
     } catch (err: any) {
-      setAuthError(err.message);
+      if (err.code === 'auth/unauthorized-domain') {
+        const domain = window.location.hostname;
+        setAuthError(`Domaine non autorisé (${domain}). Veuillez l'ajouter dans Firebase Console > Authentication > Settings > Authorized domains.`);
+      } else {
+        setAuthError(err.message);
+      }
     } finally {
       setAuthLoading(false);
     }
