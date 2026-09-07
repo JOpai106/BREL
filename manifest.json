@@ -1,27 +1,38 @@
 {
-  "name": "Brel Monitoring",
-  "short_name": "Brel",
-  "description": "Système de suivi et maintenance technique Brel Energie",
+  "id": "/",
+  "name": "BREL ENERGIE",
+  "short_name": "BREL ENERGIE",
+  "description": "Application professionnelle de suivi de maintenance des groupes électrogènes pour Brel Energie. Notre expertise, votre solution.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#F8FAFC",
+  "orientation": "any",
+  "background_color": "#2185D0",
   "theme_color": "#2185D0",
   "icons": [
     {
       "src": "/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "/icon.svg",
+      "src": "/pwa-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "/icon.svg",
+      "src": "/pwa-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

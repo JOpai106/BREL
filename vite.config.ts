@@ -17,9 +17,9 @@ export default defineConfig(({ mode }) => {
           includeAssets: ['icon.svg', 'apple-touch-icon.png', 'pwa-192.png', 'pwa-512.png', 'manifest.json'],
           manifest: {
             id: '/',
-            name: 'Brel Énergie - Maintenance',
-            short_name: 'BrelÉnergie',
-            description: 'Application de suivi de maintenance des groupes électrogènes Brel Énergie.',
+            name: 'BREL ENERGIE',
+            short_name: 'BREL ENERGIE',
+            description: 'Application professionnelle de suivi de maintenance des groupes électrogènes pour Brel Energie. Notre expertise, votre solution.',
             theme_color: '#2185D0',
             background_color: '#2185D0',
             display: 'standalone',
