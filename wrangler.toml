@@ -1,0 +1,2 @@
+name = "brel-energie"
+pages_build_output_dir = "./dist"
