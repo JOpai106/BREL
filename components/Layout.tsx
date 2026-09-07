@@ -3,6 +3,7 @@ import React from 'react';
 import { TabType, AppUser, AppNotification } from '../types';
 import { User } from 'firebase/auth';
 import NotificationBell from './NotificationBell';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -146,6 +147,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
 
           {/* Contact & Action Section */}
           <div className="flex items-center space-x-3 md:space-x-6">
+            <PWAInstallButton compact />
             {/* Brightness & Visual Theme Selector Dropdown */}
             <div className="relative">
               <button
@@ -309,6 +311,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
         {isMobileMenuOpen && (
           <div className="md:hidden absolute top-full left-0 w-full bg-white border-b border-slate-100 shadow-xl animate-in fade-in slide-in-from-top-4 duration-300">
             <nav className="p-4 grid grid-cols-2 gap-2">
+              <div className="col-span-2 mb-1">
+                <PWAInstallButton className="w-full justify-center py-2.5" />
+              </div>
               {user && (
                 <div 
                   onClick={() => handleTabChange('profile')}
