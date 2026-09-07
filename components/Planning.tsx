@@ -105,8 +105,9 @@ const Planning: React.FC<PlanningProps> = ({ records }) => {
       </div>
 
       {/* Calendar Grid */}
-      <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-xl overflow-hidden">
-        {/* Days of week */}
+      <div className="bg-white border border-slate-200 rounded-3xl md:rounded-[2.5rem] shadow-xl overflow-x-auto">
+        <div className="min-w-[650px]">
+          {/* Days of week */}
         <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/50">
           {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(day => (
             <div key={day} className="py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
@@ -164,6 +165,7 @@ const Planning: React.FC<PlanningProps> = ({ records }) => {
               </div>
             );
           })}
+        </div>
         </div>
       </div>
 

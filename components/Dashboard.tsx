@@ -29,6 +29,20 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
   const [previewImageModal, setPreviewImageModal] = useState<{ url: string; title: string; date?: string; type?: string } | null>(null);
   const [isCompressingPhoto, setIsCompressingPhoto] = useState(false);
   const [showUrlInput, setShowUrlInput] = useState(false);
+  const [isSavingLog, setIsSavingLog] = useState(false);
+
+  const openInterventionModal = (record: MaintenanceRecord) => {
+    setActiveLogMachine(record);
+    setNewLog({
+      date: new Date().toISOString().split('T')[0],
+      index: record.currentIndex || 0,
+      type: 'Vidange Complete',
+      details: '',
+      photoUrl: '',
+      signatureUrl: ''
+    });
+    setShowUrlInput(false);
+  };
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'overdue' | 'urgent' | 'operational'>('all');
@@ -230,13 +244,17 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
     return { total: records.length, overdue, urgent, operational };
   }, [records]);
 
-  const handleSaveLog = () => {
-    if (activeLogMachine) {
-      if (newLog.index <= 0) {
-        alert("Veuillez saisir un index valide.");
-        return;
-      }
-      onAddIntervention(activeLogMachine.id, newLog);
+  const handleSaveLog = async () => {
+    if (!activeLogMachine) return;
+
+    const finalIndex = newLog.index > 0 ? newLog.index : (activeLogMachine.currentIndex || 0);
+
+    setIsSavingLog(true);
+    try {
+      await onAddIntervention(activeLogMachine.id, {
+        ...newLog,
+        index: finalIndex
+      });
       setActiveLogMachine(null);
       setNewLog({
         date: new Date().toISOString().split('T')[0],
@@ -246,14 +264,19 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
         photoUrl: '',
         signatureUrl: ''
       });
+    } catch (err) {
+      console.error("Erreur enregistrement intervention:", err);
+      alert("Une erreur est survenue lors de l'archivage. Veuillez réessayer.");
+    } finally {
+      setIsSavingLog(false);
     }
   };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       
-      {/* Header & Controls Section */}
-      <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200/80 space-y-5">
+      {/* Header & Controls Section (Desktop Only) */}
+      <div className="hidden lg:block bg-white rounded-3xl p-6 shadow-sm border border-slate-200/80 space-y-5">
         <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between">
           
           {/* Search Field */}
@@ -380,8 +403,8 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
         </div>
       </div>
 
-      {/* KPI Cards Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      {/* KPI Cards Row (2x2 on Mobile & Tablet, 4x1 on Desktop) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         
         {/* Total Machines */}
         <div 
@@ -514,7 +537,7 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
       </div>
 
       {/* Machine Grid Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
         {filteredRecords.length > 0 ? filteredRecords.map((record) => {
           if (!record || !record.id) return null;
           const status = calculateMaintenanceStatus(record);
@@ -739,7 +762,7 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {appUser?.role !== 'client' && (
                       <button 
-                        onClick={() => setActiveLogMachine(record)} 
+                        onClick={() => openInterventionModal(record)} 
                         className="py-3 px-3 bg-[#2185D0] text-white rounded-xl font-extrabold text-[10px] tracking-wider uppercase hover:bg-[#1a6fb0] transition-all flex items-center justify-center space-x-1.5 shadow-md shadow-[#2185D0]/15 active:scale-95 col-span-2 sm:col-span-1"
                       >
                         <i className="fas fa-plus-circle text-xs"></i>
@@ -1046,10 +1069,11 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
 
                 <button 
                   onClick={handleSaveLog} 
-                  className="w-full py-3.5 bg-[#2185D0] text-white rounded-xl font-black text-xs tracking-widest uppercase shadow-md hover:bg-[#1a6fb0] transition-all active:scale-98 flex items-center justify-center space-x-2"
+                  disabled={isSavingLog || isCompressingPhoto}
+                  className="w-full py-3.5 bg-[#2185D0] hover:bg-[#1a6fb0] disabled:opacity-60 text-white rounded-xl font-black text-xs tracking-widest uppercase shadow-md transition-all active:scale-98 flex items-center justify-center space-x-2"
                 >
-                  <i className="fas fa-check-circle text-sm"></i>
-                  <span>ARCHIVER L'OPÉRATION</span>
+                  <i className={`fas ${isSavingLog ? 'fa-spinner fa-spin' : 'fa-check-circle'} text-sm`}></i>
+                  <span>{isSavingLog ? 'ARCHIVAGE EN COURS...' : "ARCHIVER L'OPÉRATION"}</span>
                 </button>
               </div>
 

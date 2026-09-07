@@ -56,7 +56,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
   const isClient = appUser?.role === 'client';
 
   const navItems = [
-    { id: 'dashboard', label: 'DASHBOARD / PARC', icon: 'fa-charging-station' },
+    { id: 'dashboard', label: 'PARC', icon: 'fa-charging-station' },
     { id: 'list', label: 'LISTE', icon: 'fa-list' },
     { id: 'planning', label: 'PLANNING', icon: 'fa-calendar-alt' },
     { id: 'map', label: 'CARTE', icon: 'fa-map-marked-alt' },
@@ -109,7 +109,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
             <button 
               onClick={() => handleTabChange('dashboard')} 
               className="flex items-center space-x-3 text-left focus:outline-none group cursor-pointer"
-              title="Retour au Dashboard"
+              title="Retour au Parc"
             >
               <div className="relative w-10 h-10 md:w-12 md:h-12 flex items-center justify-center shrink-0">
                 <svg viewBox="0 0 100 100" className="w-full h-full text-[#2185D0] group-hover:scale-105 transition-transform">
@@ -262,10 +262,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
             </div>
 
             {user && (
-              <div className="flex items-center space-x-3 md:space-x-4 border-r border-slate-100 pr-4 md:pr-8">
+              <div className="flex items-center space-x-2 md:space-x-4 border-r border-slate-100 pr-2 md:pr-8">
                 <NotificationBell notifications={notifications} onMarkAsRead={onMarkAsRead} />
                 
-                <div className="text-right hidden sm:block">
+                <div className="text-right hidden md:block">
                   <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{user.displayName}</p>
                   <div className="flex items-center justify-end space-x-2">
                     {appUser && (
@@ -282,12 +282,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
                   </div>
                 </div>
                 {user.photoURL ? (
-                  <button onClick={() => handleTabChange('profile')}>
+                  <button onClick={() => handleTabChange('profile')} title="Voir mon profil">
                     <img src={user.photoURL} alt="" className="w-8 h-8 md:w-10 md:h-10 rounded-xl border-2 border-slate-100 shadow-sm hover:border-[#2185D0] transition-all" referrerPolicy="no-referrer" />
                   </button>
                 ) : (
-                  <button onClick={() => handleTabChange('profile')} className="w-8 h-8 md:w-10 md:h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-[#2185D0] hover:bg-blue-50 transition-all">
-                    <i className="fas fa-user"></i>
+                  <button onClick={() => handleTabChange('profile')} title="Voir mon profil" className="w-8 h-8 md:w-10 md:h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-[#2185D0] hover:bg-blue-50 transition-all">
+                    <i className="fas fa-user text-sm"></i>
                   </button>
                 )}
               </div>
@@ -296,11 +296,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
             {isAdmin && (
               <button 
                 onClick={() => handleTabChange('add')}
-                className="bg-[#101828] hover:bg-[#2185D0] text-white px-4 md:px-6 py-2.5 rounded-lg text-[9px] md:text-[10px] font-black tracking-widest flex items-center space-x-2 md:space-x-3 transition-all active:scale-95 shadow-md"
+                className="hidden md:flex bg-[#101828] hover:bg-[#2185D0] text-white px-4 md:px-6 py-2.5 rounded-lg text-[9px] md:text-[10px] font-black tracking-widest items-center space-x-2 md:space-x-3 transition-all active:scale-95 shadow-md"
               >
                 <i className="fas fa-plus"></i>
-                <span className="hidden xs:inline">NOUVEL ÉQUIPEMENT</span>
-                <span className="xs:hidden">AJOUTER</span>
+                <span>NOUVEL ÉQUIPEMENT</span>
               </button>
             )}
           </div>
@@ -310,6 +309,43 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
         {isMobileMenuOpen && (
           <div className="md:hidden absolute top-full left-0 w-full bg-white border-b border-slate-100 shadow-xl animate-in fade-in slide-in-from-top-4 duration-300">
             <nav className="p-4 grid grid-cols-2 gap-2">
+              {user && (
+                <div 
+                  onClick={() => handleTabChange('profile')}
+                  className="col-span-2 flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100/80 rounded-2xl cursor-pointer transition-all mb-1 border border-slate-100 active:scale-98"
+                >
+                  <div className="flex items-center space-x-3">
+                    {user.photoURL ? (
+                      <img src={user.photoURL} alt="" className="w-10 h-10 rounded-xl border border-slate-200 object-cover shadow-sm" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-10 h-10 bg-[#2185D0]/10 text-[#2185D0] rounded-xl flex items-center justify-center font-black">
+                        <i className="fas fa-user text-base"></i>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-[11px] font-black text-slate-900 uppercase leading-tight">{user.displayName || 'Utilisateur'}</p>
+                      <div className="flex items-center space-x-2 mt-0.5">
+                        <span className="text-[8px] font-black uppercase tracking-widest text-[#2185D0] bg-blue-50 px-1.5 py-0.5 rounded">
+                          {appUser?.role || 'Technicien'}
+                        </span>
+                        <span className="text-[8px] text-slate-400">Mon Compte →</span>
+                      </div>
+                    </div>
+                  </div>
+                  <i className="fas fa-chevron-right text-slate-400 text-xs mr-1"></i>
+                </div>
+              )}
+              {isAdmin && (
+                <button
+                  onClick={() => handleTabChange('add')}
+                  className="col-span-2 flex items-center justify-center space-x-3 p-3.5 rounded-2xl bg-[#2185D0] hover:bg-[#1a6fb0] text-white font-black transition-all shadow-md active:scale-98 mb-1"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
+                    <i className="fas fa-plus text-xs"></i>
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest">NOUVEL ÉQUIPEMENT (AJOUTER)</span>
+                </button>
+              )}
               {navItems.map((item) => (
                 <button
                   key={item.id}
@@ -345,9 +381,53 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
       </header>
 
       {/* Main Content Area */}
-      <main className="max-w-[1440px] mx-auto p-8">
+      <main className="max-w-[1440px] mx-auto p-3 sm:p-5 md:p-6 lg:p-8 pb-28 md:pb-12">
         {children}
       </main>
+
+      {/* Footer / Copyright Section */}
+      <footer className="border-t border-slate-200/60 bg-white/50 backdrop-blur-sm py-6 px-4 text-center print:hidden mb-16 md:mb-0">
+        <div className="max-w-[1440px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-400 text-[10px] md:text-[11px] font-bold uppercase tracking-wider">
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 rounded-full bg-[#2185D0]"></div>
+            <span className="text-slate-700 font-black">BREL <span className="text-[#2185D0]">ÉNERGIE</span></span>
+            <span className="text-slate-300">|</span>
+            <span>Maintenance & Suivi des Groupes Électrogènes</span>
+          </div>
+          <p className="text-slate-400">
+            © {new Date().getFullYear()} <span className="text-slate-600 font-extrabold">BREL ÉNERGIE</span>. Tous droits réservés.
+          </p>
+        </div>
+      </footer>
+
+      {/* Mobile Bottom Quick Navigation Bar (< md screens) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-2xl px-2 py-2 flex justify-around items-center print:hidden">
+        {navItems.slice(0, 4).map((item) => (
+          <button
+            key={item.id}
+            onClick={() => handleTabChange(item.id as TabType)}
+            className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all ${
+              activeTab === item.id 
+                ? 'text-[#2185D0] font-black scale-105' 
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <i className={`fas ${item.icon} text-base mb-0.5`}></i>
+            <span className="text-[8px] font-extrabold uppercase tracking-tight truncate max-w-[60px]">
+              {item.id === 'dashboard' ? 'Parc' : item.id === 'list' ? 'Liste' : item.id === 'planning' ? 'Planning' : 'Carte'}
+            </span>
+          </button>
+        ))}
+        <button
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all ${
+            isMobileMenuOpen ? 'text-[#2185D0] font-black' : 'text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          <i className="fas fa-th-large text-base mb-0.5"></i>
+          <span className="text-[8px] font-extrabold uppercase tracking-tight">Plus</span>
+        </button>
+      </nav>
     </div>
   );
 };

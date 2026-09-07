@@ -905,15 +905,39 @@ const App: React.FC = () => {
   };
 
   const handleAddIntervention = async (recordId: string, intervention: Omit<Intervention, 'id'>) => {
-    if (!user) return;
-
     const record = records.find(r => r.id === recordId);
     if (!record) return;
 
-    const fullIntervention: Intervention = { ...intervention, id: crypto.randomUUID() };
+    const fullIntervention: Intervention = {
+      id: crypto.randomUUID(),
+      date: intervention.date || new Date().toISOString().split('T')[0],
+      index: Number(intervention.index) || record.currentIndex || 0,
+      type: intervention.type || 'Vidange Complete',
+      details: intervention.details || '',
+      photoUrl: intervention.photoUrl || '',
+      signatureUrl: intervention.signatureUrl || ''
+    };
+
     const isVidange = intervention.type === 'Vidange Complete' || intervention.type === 'Vidange Partiale';
     const isCourroie = intervention.type === 'Courroie';
     
+    const updatedRecord: MaintenanceRecord = {
+      ...record,
+      interventions: [fullIntervention, ...(record.interventions || [])],
+      lastChangeIndex: isVidange ? fullIntervention.index : record.lastChangeIndex,
+      lastChangeDate: isVidange ? fullIntervention.date : record.lastChangeDate,
+      nextChangeIndex: isVidange ? fullIntervention.index + 250 : record.nextChangeIndex,
+      lastBeltChangeIndex: isCourroie ? fullIntervention.index : record.lastBeltChangeIndex,
+      nextBeltChangeIndex: isCourroie ? fullIntervention.index + 1000 : record.nextBeltChangeIndex,
+      currentIndex: Math.max(record.currentIndex || 0, fullIntervention.index),
+      lastUpdateDate: new Date().toISOString()
+    };
+
+    const cleanRecord = sanitizeRecord(updatedRecord) as MaintenanceRecord;
+
+    // Optimistic local state update
+    setRecords(prev => prev.map(r => r.id === recordId ? cleanRecord : r));
+
     try {
       const batch = writeBatch(db);
 
@@ -921,7 +945,7 @@ const App: React.FC = () => {
       if (isVidange) {
         stock.forEach(item => {
           let newQty = item.quantity;
-          if (item.category === 'Huile') newQty = Math.max(0, item.quantity - record.oilQuantity);
+          if (item.category === 'Huile') newQty = Math.max(0, item.quantity - (record.oilQuantity || 0));
           if (item.name.toLowerCase().includes('filtre huile')) newQty = Math.max(0, item.quantity - 1);
           if (item.name.toLowerCase().includes('filtre gasoil')) newQty = Math.max(0, item.quantity - 1);
           
@@ -937,37 +961,29 @@ const App: React.FC = () => {
         }
       }
 
-      const updatedRecord = {
-        ...record,
-        interventions: [fullIntervention, ...record.interventions],
-        lastChangeIndex: isVidange ? intervention.index : record.lastChangeIndex,
-        lastChangeDate: isVidange ? intervention.date : record.lastChangeDate,
-        nextChangeIndex: isVidange ? intervention.index + 250 : record.nextChangeIndex,
-        lastBeltChangeIndex: isCourroie ? intervention.index : record.lastBeltChangeIndex,
-        nextBeltChangeIndex: isCourroie ? intervention.index + 1000 : record.nextBeltChangeIndex,
-        currentIndex: Math.max(record.currentIndex, intervention.index),
-        lastUpdateDate: new Date().toISOString()
-      };
-
-      batch.update(doc(db, 'records', recordId), updatedRecord);
+      batch.update(doc(db, 'records', recordId), cleanRecord as any);
       await batch.commit();
 
       // Send notification to client
       if (record.clientEmail) {
-        const clientId = await getUserIdByEmail(record.clientEmail);
-        if (clientId) {
-          await sendNotification(
-            clientId,
-            "Nouvelle Intervention",
-            `Une intervention de type "${intervention.type}" a été effectuée sur votre machine ${record.model} (${record.customerName}).`,
-            'intervention',
-            recordId
-          );
-          // Also check if maintenance is now approaching (though usually it resets after vidange)
-          await checkMaintenanceApproaching(updatedRecord);
+        try {
+          const clientId = await getUserIdByEmail(record.clientEmail);
+          if (clientId) {
+            await sendNotification(
+              clientId,
+              "Nouvelle Intervention",
+              `Une intervention de type "${intervention.type}" a été effectuée sur votre machine ${record.model} (${record.customerName}).`,
+              'intervention',
+              recordId
+            );
+            await checkMaintenanceApproaching(cleanRecord);
+          }
+        } catch (notifErr) {
+          console.warn("Notification client ignorée:", notifErr);
         }
       }
     } catch (err) {
+      console.error("Erreur enregistrement intervention Firestore:", err);
       handleFirestoreError(err, OperationType.WRITE, 'records');
     }
   };
