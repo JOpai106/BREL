@@ -53,6 +53,7 @@ export default defineConfig(({ mode }) => {
             ]
           },
           workbox: {
+            maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
             globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
             runtimeCaching: [
               {
@@ -79,6 +80,14 @@ export default defineConfig(({ mode }) => {
       ],
       build: {
         chunkSizeWarningLimit: 2500,
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+              vendor: ['react', 'react-dom', 'lucide-react'],
+            }
+          }
+        }
       },
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY || ''),
