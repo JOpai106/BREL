@@ -203,115 +203,6 @@ const App: React.FC = () => {
   const printRef = useRef<HTMLDivElement>(null);
   const stickerRef = useRef<HTMLDivElement>(null);
 
-  const handleDemoLogin = () => {
-    const demoUser: AppUser = {
-      uid: 'demo_admin_uid',
-      email: 'juniorobindi@gmail.com',
-      displayName: 'Junior Obindi (Admin)',
-      photoURL: '',
-      role: 'admin',
-      createdAt: new Date().toISOString(),
-      lastActive: new Date().toISOString()
-    };
-    setUser(demoUser as any);
-    setAppUser(demoUser);
-    setIsAuthReady(true);
-    if (records.length === 0) {
-      setRecords([
-        {
-          id: 'demo-rec-1',
-          customerName: 'SOCOIBTP Congo',
-          clientEmail: 'juniorobindi@gmail.com',
-          clientPhone: '+242 06 600 1122',
-          model: 'Groupe Électrogène Perkins 250KVA',
-          capacity: '250 KVA',
-          site: 'Brazzaville',
-          oilFilterRef: 'LF16015',
-          fuelFilterRef: 'FF5488',
-          airFilterRef: 'AF25127',
-          oilRef: '15W40 CI-4',
-          lastChangeIndex: 1200,
-          lastChangeDate: '2026-01-15T00:00:00.000Z',
-          nextChangeIndex: 2500,
-          lastBeltChangeIndex: 0,
-          nextBeltChangeIndex: 2000,
-          currentIndex: 2350,
-          dailyHours: 12,
-          oilQuantity: 40,
-          oilPrice: 3500,
-          oilFilterPrice: 15000,
-          fuelFilterPrice: 12000,
-          airFilterPrice: 25000,
-          laborPrice: 50000,
-          interventions: [
-            { id: 'int-1', date: '2026-01-15', index: 1200, type: 'Vidange Complete', details: 'Vidange huile moteur 15W40, remplacement filtres à huile et gasoil.', photoUrl: '', signatureUrl: '' }
-          ],
-          lastUpdateDate: new Date().toISOString()
-        },
-        {
-          id: 'demo-rec-2',
-          customerName: 'Hôtel Ledger Plaza',
-          clientEmail: 'client@ledger.cg',
-          clientPhone: '+242 05 555 2233',
-          model: 'Cummins QSK50 1000KVA',
-          capacity: '1000 KVA',
-          site: 'Pointe-Noire',
-          oilFilterRef: 'LF9009',
-          fuelFilterRef: 'FS19765',
-          airFilterRef: 'AF26158',
-          oilRef: '15W40 Premium',
-          lastChangeIndex: 5000,
-          lastChangeDate: '2025-11-10T00:00:00.000Z',
-          nextChangeIndex: 5500,
-          lastBeltChangeIndex: 0,
-          nextBeltChangeIndex: 3000,
-          currentIndex: 5480,
-          dailyHours: 18,
-          oilQuantity: 120,
-          oilPrice: 4000,
-          oilFilterPrice: 35000,
-          fuelFilterPrice: 28000,
-          airFilterPrice: 65000,
-          laborPrice: 150000,
-          interventions: [
-            { id: 'int-2', date: '2025-11-10', index: 5000, type: 'Vidange Complete', details: 'Maintenance préventive majeure 5000h.', photoUrl: '', signatureUrl: '' }
-          ],
-          lastUpdateDate: new Date().toISOString()
-        },
-        {
-          id: 'demo-rec-3',
-          customerName: 'TotalEnergies EP Congo',
-          clientEmail: 'contact@totalenergies.cg',
-          clientPhone: '+242 06 999 4455',
-          model: 'Volvo Penta TWD1643GE',
-          capacity: '500 KVA',
-          site: 'Dolisie',
-          oilFilterRef: 'VOY-21707133',
-          fuelFilterRef: 'VOY-21380488',
-          airFilterRef: 'VOY-3840003',
-          oilRef: 'VDS-4.5',
-          lastChangeIndex: 3000,
-          lastChangeDate: '2026-02-01T00:00:00.000Z',
-          nextChangeIndex: 4300,
-          lastBeltChangeIndex: 1000,
-          nextBeltChangeIndex: 4000,
-          currentIndex: 3100,
-          dailyHours: 10,
-          oilQuantity: 60,
-          oilPrice: 3800,
-          oilFilterPrice: 20000,
-          fuelFilterPrice: 18000,
-          airFilterPrice: 40000,
-          laborPrice: 80000,
-          interventions: [
-            { id: 'int-3', date: '2026-02-01', index: 3000, type: 'Vidange Partiale', details: 'Contrôle filtres et mise à niveau.', photoUrl: '', signatureUrl: '' }
-          ],
-          lastUpdateDate: new Date().toISOString()
-        }
-      ]);
-    }
-  };
-
   // Auth Listener
   useEffect(() => {
     let active = true;
@@ -1727,16 +1618,6 @@ const App: React.FC = () => {
         <div className="w-16 h-16 border-4 border-white/20 border-t-[#2185D0] rounded-full animate-spin mb-6"></div>
         <h1 className="text-xl font-black uppercase tracking-wider mb-2">BREL ENERGIE</h1>
         <p className="text-slate-400 font-medium mb-6">Chargement du profil sécurisé...</p>
-
-        <div className="mb-6 w-full max-w-xs">
-          <button 
-            onClick={handleDemoLogin}
-            className="w-full py-4 bg-[#2185D0] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-[#1a6fb0] transition-all shadow-xl shadow-blue-900/50 flex items-center justify-center space-x-2"
-          >
-            <i className="fas fa-bolt"></i>
-            <span>Accès Direct Dashboard (Mode Démo)</span>
-          </button>
-        </div>
         
         {authSyncError && (
           <div className="bg-red-950/40 border border-red-900/50 p-4 rounded-2xl max-w-sm text-center mb-6">
@@ -1792,22 +1673,6 @@ const App: React.FC = () => {
             </div>
             <h1 className="text-3xl font-black text-slate-900 uppercase italic tracking-tight mb-2">BREL <span className="text-[#2185D0]">ENERGIE</span></h1>
             <p className="text-slate-500 font-medium mb-6">Accédez à votre base de données de maintenance sécurisée.</p>
-            
-            <div className="mb-6">
-              <button 
-                onClick={handleDemoLogin}
-                className="w-full py-4 bg-[#2185D0] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-[#1a6fb0] transition-all shadow-xl shadow-blue-200 flex items-center justify-center space-x-2"
-              >
-                <i className="fas fa-bolt"></i>
-                <span>Accès Direct Dashboard (Mode Démo)</span>
-              </button>
-            </div>
-
-            <div className="flex items-center space-x-4 mb-6">
-              <div className="flex-1 h-px bg-slate-100"></div>
-              <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest">Ou connexion classique</span>
-              <div className="flex-1 h-px bg-slate-100"></div>
-            </div>
 
             <form onSubmit={handleAuth} className="space-y-4 mb-8">
               <div className="text-left">
@@ -1878,121 +1743,6 @@ const App: React.FC = () => {
               >
                 <i className="fab fa-google text-lg"></i>
                 <span>Google</span>
-              </button>
-
-              <button 
-                onClick={() => {
-                  const demoUser: AppUser = {
-                    uid: 'demo_admin_uid',
-                    email: 'juniorobindi@gmail.com',
-                    displayName: 'Junior Obindi (Admin)',
-                    photoURL: '',
-                    role: 'admin',
-                    createdAt: new Date().toISOString(),
-                    lastActive: new Date().toISOString()
-                  };
-                  setUser(demoUser as any);
-                  setAppUser(demoUser);
-                  setIsAuthReady(true);
-                  if (records.length === 0) {
-                    setRecords([
-                      {
-                        id: 'demo-rec-1',
-                        customerName: 'SOCOIBTP Congo',
-                        clientEmail: 'juniorobindi@gmail.com',
-                        clientPhone: '+242 06 600 1122',
-                        model: 'Groupe Électrogène Perkins 250KVA',
-                        capacity: '250 KVA',
-                        site: 'Brazzaville',
-                        oilFilterRef: 'LF16015',
-                        fuelFilterRef: 'FF5488',
-                        airFilterRef: 'AF25127',
-                        oilRef: '15W40 CI-4',
-                        lastChangeIndex: 1200,
-                        lastChangeDate: '2026-01-15T00:00:00.000Z',
-                        nextChangeIndex: 2500,
-                        lastBeltChangeIndex: 0,
-                        nextBeltChangeIndex: 2000,
-                        currentIndex: 2350,
-                        dailyHours: 12,
-                        oilQuantity: 40,
-                        oilPrice: 3500,
-                        oilFilterPrice: 15000,
-                        fuelFilterPrice: 12000,
-                        airFilterPrice: 25000,
-                        laborPrice: 50000,
-                        interventions: [
-                          { id: 'int-1', date: '2026-01-15', index: 1200, type: 'Vidange Complete', details: 'Vidange huile moteur 15W40, remplacement filtres à huile et gasoil.', photoUrl: '', signatureUrl: '' }
-                        ],
-                        lastUpdateDate: new Date().toISOString()
-                      },
-                      {
-                        id: 'demo-rec-2',
-                        customerName: 'Hôtel Ledger Plaza',
-                        clientEmail: 'client@ledger.cg',
-                        clientPhone: '+242 05 555 2233',
-                        model: 'Cummins QSK50 1000KVA',
-                        capacity: '1000 KVA',
-                        site: 'Pointe-Noire',
-                        oilFilterRef: 'LF9009',
-                        fuelFilterRef: 'FS19765',
-                        airFilterRef: 'AF26158',
-                        oilRef: '15W40 Premium',
-                        lastChangeIndex: 5000,
-                        lastChangeDate: '2025-11-10T00:00:00.000Z',
-                        nextChangeIndex: 5500,
-                        lastBeltChangeIndex: 0,
-                        nextBeltChangeIndex: 3000,
-                        currentIndex: 5480,
-                        dailyHours: 18,
-                        oilQuantity: 120,
-                        oilPrice: 4000,
-                        oilFilterPrice: 35000,
-                        fuelFilterPrice: 28000,
-                        airFilterPrice: 65000,
-                        laborPrice: 150000,
-                        interventions: [
-                          { id: 'int-2', date: '2025-11-10', index: 5000, type: 'Vidange Complete', details: 'Maintenance préventive majeure 5000h.', photoUrl: '', signatureUrl: '' }
-                        ],
-                        lastUpdateDate: new Date().toISOString()
-                      },
-                      {
-                        id: 'demo-rec-3',
-                        customerName: 'TotalEnergies EP Congo',
-                        clientEmail: 'contact@totalenergies.cg',
-                        clientPhone: '+242 06 999 4455',
-                        model: 'Volvo Penta TWD1643GE',
-                        capacity: '500 KVA',
-                        site: 'Dolisie',
-                        oilFilterRef: 'VOY-21707133',
-                        fuelFilterRef: 'VOY-21380488',
-                        airFilterRef: 'VOY-3840003',
-                        oilRef: 'VDS-4.5',
-                        lastChangeIndex: 3000,
-                        lastChangeDate: '2026-02-01T00:00:00.000Z',
-                        nextChangeIndex: 4300,
-                        lastBeltChangeIndex: 1000,
-                        nextBeltChangeIndex: 4000,
-                        currentIndex: 3100,
-                        dailyHours: 10,
-                        oilQuantity: 60,
-                        oilPrice: 3800,
-                        oilFilterPrice: 20000,
-                        fuelFilterPrice: 18000,
-                        airFilterPrice: 40000,
-                        laborPrice: 80000,
-                        interventions: [
-                          { id: 'int-3', date: '2026-02-01', index: 3000, type: 'Vidange Partiale', details: 'Contrôle filtres et mise à niveau.', photoUrl: '', signatureUrl: '' }
-                        ],
-                        lastUpdateDate: new Date().toISOString()
-                      }
-                    ]);
-                  }
-                }}
-                className="w-full py-4 bg-[#2185D0] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-[#1a6fb0] transition-all shadow-xl shadow-blue-200 flex items-center justify-center space-x-2"
-              >
-                <i className="fas fa-bolt"></i>
-                <span>Accès Direct Dashboard (Mode Démo)</span>
               </button>
             </div>
           </div>
