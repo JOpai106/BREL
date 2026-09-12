@@ -39,7 +39,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ appUser }) => {
       setConfirmPassword('');
     } catch (err: any) {
       console.error("Erreur mise à jour mot de passe:", err);
-      if (err.code === 'auth/wrong-password') {
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         setError("L'ancien mot de passe est incorrect.");
       } else {
         setError("Une erreur est survenue lors de la mise à jour du mot de passe.");

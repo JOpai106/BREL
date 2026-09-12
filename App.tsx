@@ -16,7 +16,7 @@ import { MaintenanceRecord, TabType, Intervention, ArchivedDocument, StockItem, 
 import { getMaintenanceAdvice } from './services/geminiService';
 import { formatNumber, exportToCSV, calculateMaintenanceStatus } from './utils';
 import { 
-  auth, db, loginWithGoogle, logout, handleFirestoreError, OperationType, loginWithEmail, registerWithEmail 
+  auth, db, loginWithGoogle, logout, handleFirestoreError, OperationType, loginWithEmail, registerWithEmail, resetUserPassword 
 } from './firebase';
 import { 
   onSnapshot, collection, doc, setDoc, updateDoc, deleteDoc, query, where, writeBatch, getDocs, getDoc, limit 
@@ -49,10 +49,13 @@ const App: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [authSuccess, setAuthSuccess] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+  const [isRateLimited, setIsRateLimited] = useState(false);
 
   const handleGoogleLogin = async () => {
     setAuthError('');
+    setAuthSuccess('');
     setAuthLoading(true);
     try {
       await loginWithGoogle();
@@ -72,9 +75,37 @@ const App: React.FC = () => {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      setAuthError("Veuillez saisir votre adresse email ci-dessus avant de demander la réinitialisation.");
+      return;
+    }
+    setAuthError('');
+    setAuthSuccess('');
+    setAuthLoading(true);
+    try {
+      await resetUserPassword(email.trim());
+      setAuthSuccess(`Un email de réinitialisation a été envoyé à ${email.trim()}. Cliquez sur le lien reçu pour réinitialiser votre mot de passe et débloquer immédiatement l'accès.`);
+      setIsRateLimited(false);
+    } catch (err: any) {
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+        setAuthError("Aucun compte n'a été trouvé avec cette adresse email.");
+      } else if (err.code === 'auth/invalid-email') {
+        setAuthError("Format d'adresse email invalide.");
+      } else if (err.code === 'auth/too-many-requests') {
+        setAuthError("Trop de demandes de réinitialisation rapprochées. Veuillez patienter quelques minutes avant de renouveler la demande.");
+      } else {
+        setAuthError(err.message || "Erreur lors de l'envoi du lien de réinitialisation.");
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
+    setAuthSuccess('');
     setAuthLoading(true);
     try {
       if (isRegistering) {
@@ -82,12 +113,45 @@ const App: React.FC = () => {
       } else {
         await loginWithEmail(email, password);
       }
+      setIsRateLimited(false);
     } catch (err: any) {
-      if (err.code === 'auth/unauthorized-domain') {
+      console.warn("Firebase auth warning:", err?.code || err?.message || err);
+      const code = err.code || '';
+      if (code === 'auth/invalid-credential') {
+        setIsRateLimited(false);
+        if (!isRegistering) {
+          setAuthError("Identifiants incorrects : l'email ou le mot de passe est erroné. Si vous n'avez pas encore créé votre mot de passe, cliquez sur « Pas de compte ? S'enregistrer » ci-dessous pour créer votre accès avec cet email.");
+        } else {
+          setAuthError("Impossible de créer le compte avec ces identifiants. Vérifiez votre email ou essayez de vous connecter avec Google.");
+        }
+      } else if (code === 'auth/user-not-found') {
+        setIsRateLimited(false);
+        setAuthError("Aucun utilisateur n'est associé à cette adresse email. Veuillez cliquer sur « Pas de compte ? S'enregistrer » pour activer votre compte.");
+      } else if (code === 'auth/wrong-password') {
+        setIsRateLimited(false);
+        setAuthError("Mot de passe incorrect. Vous pouvez réinitialiser votre mot de passe ci-dessous.");
+      } else if (code === 'auth/email-already-in-use') {
+        setIsRateLimited(false);
+        setAuthError("Cette adresse email est déjà enregistrée. Veuillez cliquer sur « Déjà un compte ? Se connecter ».");
+      } else if (code === 'auth/weak-password') {
+        setIsRateLimited(false);
+        setAuthError("Le mot de passe doit comporter au moins 6 caractères.");
+      } else if (code === 'auth/invalid-email') {
+        setIsRateLimited(false);
+        setAuthError("Veuillez saisir une adresse email valide.");
+      } else if (code === 'auth/operation-not-allowed') {
+        setIsRateLimited(false);
+        setAuthError("La connexion par Email / Mot de passe n'est pas encore activée dans votre Firebase Console. Activez-la dans Firebase Console > Authentication > Sign-in method.");
+      } else if (code === 'auth/too-many-requests') {
+        setIsRateLimited(true);
+        setAuthError("L'accès à ce compte a été temporairement bloqué par Firebase après plusieurs tentatives erronées. Vous pouvez réinitialiser votre mot de passe pour lever le blocage immédiatement, ou vous connecter avec Google.");
+      } else if (code === 'auth/unauthorized-domain') {
+        setIsRateLimited(false);
         const domain = window.location.hostname;
         setAuthError(`Domaine non autorisé (${domain}). Veuillez l'ajouter dans Firebase Console > Authentication > Settings > Authorized domains.`);
       } else {
-        setAuthError(err.message);
+        setIsRateLimited(false);
+        setAuthError(err.message || "Erreur d'authentification.");
       }
     } finally {
       setAuthLoading(false);
@@ -1699,8 +1763,8 @@ const App: React.FC = () => {
                 {!isRegistering && (
                   <button 
                     type="button"
-                    onClick={() => setAuthError("En cas d'oubli, veuillez contacter l'administrateur pour réinitialiser votre mot de passe.")}
-                    className="text-[8px] font-black text-slate-400 uppercase tracking-widest hover:text-[#2185D0] transition-colors mt-2 ml-4"
+                    onClick={handleForgotPassword}
+                    className="text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-[#2185D0] transition-colors mt-2 ml-4 block"
                   >
                     Mot de passe oublié ?
                   </button>
@@ -1708,9 +1772,49 @@ const App: React.FC = () => {
               </div>
               
               {authError && (
-                <p className="text-red-500 text-[10px] font-bold uppercase tracking-widest bg-red-50 p-3 rounded-xl border border-red-100">
-                  {authError}
-                </p>
+                <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-left space-y-2.5">
+                  <div className="flex items-start space-x-2.5">
+                    <i className="fas fa-exclamation-circle text-red-500 mt-0.5 text-sm shrink-0"></i>
+                    <div className="flex-1">
+                      <p className="text-red-700 text-xs font-medium leading-relaxed">
+                        {authError}
+                      </p>
+                      {isRateLimited && (
+                        <div className="mt-3 pt-2.5 border-t border-red-100 flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleForgotPassword}
+                            disabled={authLoading}
+                            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-[11px] font-bold tracking-wide transition-colors shadow-sm disabled:opacity-50"
+                          >
+                            <i className="fas fa-paper-plane text-[9px]"></i>
+                            <span>Envoyer lien de déblocage par email</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleGoogleLogin}
+                            disabled={authLoading}
+                            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-red-200 hover:bg-red-50 text-red-800 rounded-xl text-[11px] font-bold tracking-wide transition-colors disabled:opacity-50"
+                          >
+                            <i className="fab fa-google text-[10px]"></i>
+                            <span>Connexion Google immédiate</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {authSuccess && (
+                <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 text-left">
+                  <div className="flex items-start space-x-2.5">
+                    <i className="fas fa-check-circle text-emerald-500 mt-0.5 text-sm shrink-0"></i>
+                    <p className="text-emerald-800 text-xs font-medium leading-relaxed">
+                      {authSuccess}
+                    </p>
+                  </div>
+                </div>
               )}
               
               <button 

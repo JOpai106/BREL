@@ -72,7 +72,10 @@ const UserManager: React.FC<UserManagerProps> = ({ currentUserEmail }) => {
       await setDoc(userRef, newUser);
       setNewEmail('');
       setShowAddForm(false);
-      setNotification({ message: `L'utilisateur ${newEmail} a été pré-autorisé.`, type: 'success' });
+      setNotification({ 
+        message: `L'utilisateur ${newEmail} est pré-autorisé. Il peut maintenant créer son compte (« S'enregistrer ») ou se connecter avec Google avec cet email.`, 
+        type: 'success' 
+      });
     } catch (error) {
       setNotification({ message: "Erreur lors de l'invitation.", type: 'error' });
       handleFirestoreError(error, OperationType.WRITE, 'users');
