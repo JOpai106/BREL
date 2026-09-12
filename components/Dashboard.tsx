@@ -14,9 +14,10 @@ interface Props {
   onExport?: () => void;
   onBlankQuote?: () => void;
   appUser: AppUser | null;
+  onUpdateCurrentIndex?: (recordId: string, newIndex: number) => Promise<void> | void;
 }
 
-const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddIntervention, onExport, onBlankQuote, appUser }) => {
+const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddIntervention, onExport, onBlankQuote, appUser, onUpdateCurrentIndex }) => {
   const [activeLogMachine, setActiveLogMachine] = useState<MaintenanceRecord | null>(null);
   const [notifyMachine, setNotifyMachine] = useState<MaintenanceRecord | null>(null);
   const [notifyMessage, setNotifyMessage] = useState<string>('');
@@ -24,6 +25,51 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
   const [copiedText, setCopiedText] = useState(false);
   const [isSavingPhone, setIsSavingPhone] = useState(false);
   const [savedPhoneSuccess, setSavedPhoneSuccess] = useState(false);
+
+  // Index Actuel edit states (pour client et techniciens, sans altérer aucune autre donnée)
+  const [editingIndexMachine, setEditingIndexMachine] = useState<MaintenanceRecord | null>(null);
+  const [tempIndexValue, setTempIndexValue] = useState<string>('');
+  const [isSavingIndex, setIsSavingIndex] = useState(false);
+  const [indexSuccessMessage, setIndexSuccessMessage] = useState<string>('');
+  const [indexErrorMessage, setIndexErrorMessage] = useState<string>('');
+
+  const openEditIndexModal = (record: MaintenanceRecord) => {
+    setEditingIndexMachine(record);
+    setTempIndexValue((record.currentIndex ?? 0).toString());
+    setIndexSuccessMessage('');
+    setIndexErrorMessage('');
+  };
+
+  const handleSaveIndexOnly = async () => {
+    if (!editingIndexMachine) return;
+    const parsed = Number(tempIndexValue);
+    if (isNaN(parsed) || parsed < 0) {
+      setIndexErrorMessage("Veuillez saisir un nombre valide positif pour l'index horaire.");
+      return;
+    }
+    setIsSavingIndex(true);
+    setIndexErrorMessage('');
+    try {
+      if (onUpdateCurrentIndex) {
+        await onUpdateCurrentIndex(editingIndexMachine.id, parsed);
+      } else {
+        await updateDoc(doc(db, 'records', editingIndexMachine.id), {
+          currentIndex: parsed,
+          lastUpdateDate: new Date().toISOString()
+        });
+      }
+      setIndexSuccessMessage(`L'index a été mis à jour avec succès (${formatNumber(parsed)} h).`);
+      setTimeout(() => {
+        setEditingIndexMachine(null);
+        setIndexSuccessMessage('');
+      }, 1200);
+    } catch (err: any) {
+      console.error("Erreur lors de l'enregistrement de l'index:", err);
+      setIndexErrorMessage(err?.message || "Erreur lors de la mise à jour de l'index.");
+    } finally {
+      setIsSavingIndex(false);
+    }
+  };
 
   // Photo attachment states
   const [previewImageModal, setPreviewImageModal] = useState<{ url: string; title: string; date?: string; type?: string } | null>(null);
@@ -604,6 +650,16 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                         </button>
                       </>
                     )}
+                    {appUser?.role === 'client' && (
+                      <button 
+                        onClick={() => openEditIndexModal(record)} 
+                        title="Mettre à jour l'index actuel (horamètre)" 
+                        className="px-2.5 py-1 text-[#2185D0] hover:text-white hover:bg-[#2185D0] rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center space-x-1 transition-all"
+                      >
+                        <i className="fas fa-tachometer-alt text-xs"></i>
+                        <span>Index</span>
+                      </button>
+                    )}
                     <button 
                       onClick={() => onPrint('history', record)} 
                       title="Voir Historique" 
@@ -668,14 +724,26 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                 <div className="grid grid-cols-2 gap-3 mb-6">
                   
                   {/* Current Index */}
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">INDEX ACTUEL</p>
-                      <i className="fas fa-tachometer-alt text-slate-300 text-xs"></i>
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">INDEX ACTUEL</p>
+                        <i className="fas fa-tachometer-alt text-slate-300 text-xs"></i>
+                      </div>
+                      <p className="text-2xl font-black text-slate-900">
+                        {formatNumber(currentIndex)} <span className="text-xs text-slate-400 font-semibold">h</span>
+                      </p>
                     </div>
-                    <p className="text-2xl font-black text-slate-900">
-                      {formatNumber(currentIndex)} <span className="text-xs text-slate-400 font-semibold">h</span>
-                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => openEditIndexModal(record)}
+                      className="mt-2.5 inline-flex items-center justify-center space-x-1.5 py-1.5 px-2.5 bg-white hover:bg-[#2185D0] text-[#2185D0] hover:text-white border border-[#2185D0]/30 hover:border-[#2185D0] rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-xs active:scale-95 w-full"
+                      title="Mettre à jour l'index actuel uniquement"
+                    >
+                      <i className="fas fa-pencil-alt text-[9px]"></i>
+                      <span>Modifier l'index</span>
+                    </button>
                   </div>
 
                   {/* Remaining Hours */}
@@ -755,12 +823,12 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                   </div>
                 </div>
 
-                {/* Action Buttons Grid (Structured 5-button Layout) */}
-                <div className="mt-auto pt-4 border-t border-slate-100">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">ACTIONS ET DOCUMENTS</p>
-                  
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {appUser?.role !== 'client' && (
+                {/* Action Buttons Grid (Masqué pour le rôle client) */}
+                {appUser?.role !== 'client' && (
+                  <div className="mt-auto pt-4 border-t border-slate-100">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">ACTIONS ET DOCUMENTS</p>
+                    
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       <button 
                         onClick={() => openInterventionModal(record)} 
                         className="py-3 px-3 bg-[#2185D0] text-white rounded-xl font-extrabold text-[10px] tracking-wider uppercase hover:bg-[#1a6fb0] transition-all flex items-center justify-center space-x-1.5 shadow-md shadow-[#2185D0]/15 active:scale-95 col-span-2 sm:col-span-1"
@@ -768,50 +836,64 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                         <i className="fas fa-plus-circle text-xs"></i>
                         <span>INTERVENTION</span>
                       </button>
-                    )}
-                    
-                    <button 
-                      onClick={() => openNotificationModal(record)} 
-                      className="py-3 px-3 bg-emerald-600 text-white rounded-xl font-extrabold text-[10px] tracking-wider uppercase hover:bg-emerald-700 transition-all flex items-center justify-center space-x-1.5 shadow-md shadow-emerald-600/15 active:scale-95 col-span-2 sm:col-span-1"
-                      title="Notification SMS / WhatsApp directe au client"
-                    >
-                      <i className="fab fa-whatsapp text-xs"></i>
-                      <span>NOTIFIER CLIENT</span>
-                    </button>
+                      
+                      <button 
+                        onClick={() => openNotificationModal(record)} 
+                        className="py-3 px-3 bg-emerald-600 text-white rounded-xl font-extrabold text-[10px] tracking-wider uppercase hover:bg-emerald-700 transition-all flex items-center justify-center space-x-1.5 shadow-md shadow-emerald-600/15 active:scale-95 col-span-2 sm:col-span-1"
+                        title="Notification SMS / WhatsApp directe au client"
+                      >
+                        <i className="fab fa-whatsapp text-xs"></i>
+                        <span>NOTIFIER CLIENT</span>
+                      </button>
 
-                    <button 
-                      onClick={() => onPrint('invoice', record)} 
-                      className="py-3 px-3 bg-slate-900 text-white rounded-xl font-extrabold text-[10px] tracking-wider uppercase hover:bg-slate-800 transition-all flex items-center justify-center space-x-1.5 shadow-md active:scale-95"
-                    >
-                      <i className="fas fa-file-invoice text-xs"></i>
-                      <span>FACTURE</span>
-                    </button>
+                      <button 
+                        onClick={() => onPrint('invoice', record)} 
+                        className="py-3 px-3 bg-slate-900 text-white rounded-xl font-extrabold text-[10px] tracking-wider uppercase hover:bg-slate-800 transition-all flex items-center justify-center space-x-1.5 shadow-md active:scale-95"
+                      >
+                        <i className="fas fa-file-invoice text-xs"></i>
+                        <span>FACTURE</span>
+                      </button>
 
-                    <button 
-                      onClick={() => onPrint('quote', record)} 
-                      className="py-3 px-3 bg-slate-900 text-white rounded-xl font-extrabold text-[10px] tracking-wider uppercase hover:bg-slate-800 transition-all flex items-center justify-center space-x-1.5 shadow-md active:scale-95"
-                    >
-                      <i className="fas fa-file-invoice-dollar text-xs text-amber-400"></i>
-                      <span>DEVIS</span>
-                    </button>
+                      <button 
+                        onClick={() => onPrint('quote', record)} 
+                        className="py-3 px-3 bg-slate-900 text-white rounded-xl font-extrabold text-[10px] tracking-wider uppercase hover:bg-slate-800 transition-all flex items-center justify-center space-x-1.5 shadow-md active:scale-95"
+                      >
+                        <i className="fas fa-file-invoice-dollar text-xs text-amber-400"></i>
+                        <span>DEVIS</span>
+                      </button>
 
-                    <button 
-                      onClick={() => onPrint('history', record)} 
-                      className="py-3 px-3 bg-slate-100 text-slate-700 hover:text-slate-900 rounded-xl font-extrabold text-[10px] tracking-wider uppercase hover:bg-slate-200 transition-all flex items-center justify-center space-x-1.5 active:scale-95"
-                    >
-                      <i className="fas fa-history text-xs text-slate-500"></i>
-                      <span>HISTORIQUE</span>
-                    </button>
+                      <button 
+                        onClick={() => onPrint('history', record)} 
+                        className="py-3 px-3 bg-slate-100 text-slate-700 hover:text-slate-900 rounded-xl font-extrabold text-[10px] tracking-wider uppercase hover:bg-slate-200 transition-all flex items-center justify-center space-x-1.5 active:scale-95"
+                      >
+                        <i className="fas fa-history text-xs text-slate-500"></i>
+                        <span>HISTORIQUE</span>
+                      </button>
 
-                    <button 
-                      onClick={() => onPrint('sticker', record)} 
-                      className="py-3 px-3 bg-amber-500 text-white rounded-xl font-extrabold text-[10px] tracking-wider uppercase hover:bg-amber-600 transition-all flex items-center justify-center space-x-1.5 shadow-md shadow-amber-500/15 active:scale-95"
+                      <button 
+                        onClick={() => onPrint('sticker', record)} 
+                        className="py-3 px-3 bg-amber-500 text-white rounded-xl font-extrabold text-[10px] tracking-wider uppercase hover:bg-amber-600 transition-all flex items-center justify-center space-x-1.5 shadow-md shadow-amber-500/15 active:scale-95"
+                      >
+                        <i className="fas fa-sticky-note text-xs"></i>
+                        <span>AUTO-COLLANT</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Section exclusive pour le profil CLIENT : Relevé d'index sans altération d'autres données */}
+                {appUser?.role === 'client' && (
+                  <div className="mt-auto pt-4 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => openEditIndexModal(record)}
+                      className="w-full py-3.5 px-4 bg-[#2185D0] hover:bg-[#1a6fb0] text-white rounded-2xl font-black text-xs tracking-wider uppercase transition-all flex items-center justify-center space-x-2 shadow-md shadow-[#2185D0]/20 active:scale-98"
                     >
-                      <i className="fas fa-sticky-note text-xs"></i>
-                      <span>AUTO-COLLANT</span>
+                      <i className="fas fa-tachometer-alt text-sm"></i>
+                      <span>ACTUALISER L'INDEX HORAIRE ({formatNumber(currentIndex)} H)</span>
                     </button>
                   </div>
-                </div>
+                )}
 
               </div>
 
@@ -1408,6 +1490,137 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                   className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-colors"
                 >
                   Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Dédié : Modification Exclusive de l'Index Actuel (Horamètre) */}
+      {editingIndexMachine && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-100 my-auto animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-5 md:p-6 bg-slate-900 text-white flex justify-between items-center">
+              <div className="flex items-center space-x-3.5">
+                <div className="w-11 h-11 bg-[#2185D0] rounded-2xl flex items-center justify-center text-white shadow-md shadow-[#2185D0]/30">
+                  <i className="fas fa-tachometer-alt text-lg"></i>
+                </div>
+                <div>
+                  <h3 className="font-black text-base md:text-lg uppercase tracking-tight">Relevé d'Index Actuel</h3>
+                  <p className="text-slate-400 text-xs font-medium">
+                    Mise à jour de l'horamètre uniquement
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setEditingIndexMachine(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all"
+              >
+                <i className="fas fa-times text-xs"></i>
+              </button>
+            </div>
+
+            {/* Corps */}
+            <div className="p-5 md:p-6 space-y-5">
+              {/* Info machine */}
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-black text-slate-900 uppercase italic">
+                    {editingIndexMachine.customerName}
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-500 font-mono">
+                    {editingIndexMachine.model} {editingIndexMachine.site ? `• ${editingIndexMachine.site}` : ''}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-black text-slate-800 font-mono">
+                    {formatNumber(editingIndexMachine.currentIndex)} h
+                  </span>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Index Précédent</p>
+                </div>
+              </div>
+
+              {/* Champ de saisie index */}
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  Nouvel Index Actuel (Heures de fonctionnement)
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={tempIndexValue}
+                    onChange={(e) => setTempIndexValue(e.target.value)}
+                    placeholder="Ex: 1540"
+                    className="w-full bg-slate-50 border-2 border-slate-200 focus:border-[#2185D0] focus:bg-white rounded-2xl px-4 py-3.5 text-slate-900 font-mono text-xl font-black focus:outline-none transition-all pr-16"
+                    autoFocus
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 font-mono font-bold text-slate-400 text-sm pointer-events-none">
+                    heures
+                  </span>
+                </div>
+                {Number(tempIndexValue) < (editingIndexMachine.currentIndex || 0) && (
+                  <p className="text-[11px] text-amber-600 font-bold flex items-center pt-1">
+                    <i className="fas fa-exclamation-triangle mr-1.5"></i>
+                    Attention : la valeur saisie ({tempIndexValue} h) est inférieure à l'index actuel enregistré ({editingIndexMachine.currentIndex} h).
+                  </p>
+                )}
+              </div>
+
+              {/* Garantie d'intégrité des données */}
+              <div className="p-3.5 bg-blue-50/70 rounded-2xl border border-blue-100 flex items-start space-x-2.5">
+                <i className="fas fa-shield-alt text-[#2185D0] mt-0.5 text-sm shrink-0"></i>
+                <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
+                  <strong>Sécurité des données :</strong> Seul l'index actuel de l'équipement sera actualisé pour recalculer le restant d'heures avant vidange. Aucune autre information n'est altérée.
+                </p>
+              </div>
+
+              {/* Messages d'état */}
+              {indexErrorMessage && (
+                <div className="p-3 bg-red-50 text-red-700 text-xs font-bold rounded-xl border border-red-200 flex items-center space-x-2">
+                  <i className="fas fa-exclamation-circle text-red-500"></i>
+                  <span>{indexErrorMessage}</span>
+                </div>
+              )}
+
+              {indexSuccessMessage && (
+                <div className="p-3 bg-emerald-50 text-emerald-800 text-xs font-bold rounded-xl border border-emerald-200 flex items-center space-x-2">
+                  <i className="fas fa-check-circle text-emerald-600"></i>
+                  <span>{indexSuccessMessage}</span>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex items-center space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingIndexMachine(null)}
+                  disabled={isSavingIndex}
+                  className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-wider rounded-xl transition-all"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveIndexOnly}
+                  disabled={isSavingIndex}
+                  className="flex-1 py-3.5 bg-[#2185D0] hover:bg-[#1a6fb0] disabled:opacity-50 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md shadow-[#2185D0]/20 transition-all flex items-center justify-center space-x-2 active:scale-95"
+                >
+                  {isSavingIndex ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin text-xs"></i>
+                      <span>Enregistrement...</span>
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-check text-xs"></i>
+                      <span>Valider l'Index</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

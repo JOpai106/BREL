@@ -666,6 +666,34 @@ const App: React.FC = () => {
     setActiveTab('add');
   };
 
+  const handleUpdateCurrentIndex = async (recordId: string, newIndex: number) => {
+    const target = records.find(r => r.id === recordId);
+    if (!target) return;
+    const cleanIndex = Math.max(0, Math.round(newIndex));
+    const now = new Date().toISOString();
+
+    const updatedRecord: MaintenanceRecord = {
+      ...target,
+      currentIndex: cleanIndex,
+      lastUpdateDate: now
+    };
+
+    // Optimistic UI update
+    setRecords(prev => prev.map(r => r.id === recordId ? updatedRecord : r));
+
+    try {
+      // Met à jour EXCLUSIVEMENT currentIndex et lastUpdateDate, sans toucher aux autres champs
+      await updateDoc(doc(db, 'records', recordId), {
+        currentIndex: cleanIndex,
+        lastUpdateDate: now
+      });
+      await checkMaintenanceApproaching(updatedRecord);
+    } catch (err) {
+      console.error("Erreur mise à jour index:", err);
+      handleFirestoreError(err, OperationType.WRITE, 'records');
+    }
+  };
+
   const deleteArchivedDoc = (id: string) => {
     setDeleteConfirmData({ type: 'archive', count: 1, ids: [id] });
   };
@@ -1877,6 +1905,7 @@ const App: React.FC = () => {
               }}
               onExport={handleExportData}
               onBlankQuote={handleBlankQuote}
+              onUpdateCurrentIndex={handleUpdateCurrentIndex}
             />
           )}
           {activeTab === 'add' && (appUser?.role === 'admin' || appUser?.role === 'technician' || !appUser) && (
@@ -1893,6 +1922,7 @@ const App: React.FC = () => {
               }}
               onEdit={handleEdit} 
               appUser={appUser}
+              onUpdateCurrentIndex={handleUpdateCurrentIndex}
             />
           )}
           {activeTab === 'planning' && (
