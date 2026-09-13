@@ -38,6 +38,13 @@ const App: React.FC = () => {
   const [loadingAI, setLoadingAI] = useState(false);
   const [docSearch, setDocSearch] = useState('');
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
+  
+  // Pour le client, l'onglet liste n'est pas accessible
+  useEffect(() => {
+    if (appUser?.role === 'client' && activeTab === 'list') {
+      setActiveTab('dashboard');
+    }
+  }, [appUser?.role, activeTab]);
   const [deleteConfirmData, setDeleteConfirmData] = useState<{ 
     type: 'archive' | 'intervention' | 'machine'; 
     count: number; 
@@ -1965,7 +1972,7 @@ const App: React.FC = () => {
               initialData={editingRecord || undefined} 
             />
           )}
-          {activeTab === 'list' && (
+          {activeTab === 'list' && appUser?.role !== 'client' && (
             <MaintenanceList 
               records={records} 
               onDelete={async (id) => {

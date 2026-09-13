@@ -239,6 +239,7 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
   };
 
   const openNotificationModal = (record: MaintenanceRecord) => {
+    if (appUser?.role === 'client') return;
     setNotifyMachine(record);
     setPhoneOverride(record.clientPhone || '');
     setSavedPhoneSuccess(false);
@@ -765,24 +766,26 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                       </div>
                     )}
 
-                    {record.clientPhone ? (
-                      <button 
-                        onClick={() => openNotificationModal(record)}
-                        className="text-emerald-700 text-xs font-extrabold flex items-center bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200/80 hover:bg-emerald-100 transition-colors shadow-xs"
-                        title="Envoyer une notification directe"
-                      >
-                        <i className="fab fa-whatsapp mr-1.5 text-[#25D366] text-xs"></i>
-                        <span>{record.clientPhone}</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => openNotificationModal(record)}
-                        className="text-slate-400 text-xs font-medium flex items-center bg-slate-50 px-2.5 py-1 rounded-lg border border-dashed border-slate-200 hover:border-slate-300 transition-colors"
-                        title="Ajouter ou envoyer une notification"
-                      >
-                        <i className="fas fa-plus-circle mr-1 text-[10px]"></i>
-                        <span>+ Tel client</span>
-                      </button>
+                    {appUser?.role !== 'client' && (
+                      record.clientPhone ? (
+                        <button 
+                          onClick={() => openNotificationModal(record)}
+                          className="text-emerald-700 text-xs font-extrabold flex items-center bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200/80 hover:bg-emerald-100 transition-colors shadow-xs"
+                          title="Envoyer une notification directe"
+                        >
+                          <i className="fab fa-whatsapp mr-1.5 text-[#25D366] text-xs"></i>
+                          <span>{record.clientPhone}</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => openNotificationModal(record)}
+                          className="text-slate-400 text-xs font-medium flex items-center bg-slate-50 px-2.5 py-1 rounded-lg border border-dashed border-slate-200 hover:border-slate-300 transition-colors"
+                          title="Ajouter ou envoyer une notification"
+                        >
+                          <i className="fas fa-plus-circle mr-1 text-[10px]"></i>
+                          <span>+ Tel client</span>
+                        </button>
+                      )
                     )}
                   </div>
                 </div>
@@ -1331,7 +1334,7 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
       )}
 
       {/* Direct Client Notification Modal */}
-      {notifyMachine && (
+      {notifyMachine && appUser?.role !== 'client' && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 md:p-4 overflow-y-auto animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 my-auto animate-in zoom-in-95 duration-200">
             

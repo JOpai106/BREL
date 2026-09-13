@@ -56,12 +56,19 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
   const isTechnician = appUser?.role === 'technician';
   const isClient = appUser?.role === 'client';
 
-  const navItems = [
+  const navItems: { id: string; label: string; icon: string }[] = [
     { id: 'dashboard', label: 'PARC', icon: 'fa-charging-station' },
-    { id: 'list', label: 'LISTE', icon: 'fa-list' },
+  ];
+
+  // Le bouton "LISTE" n'est pas affiché pour les comptes clients
+  if (!isClient) {
+    navItems.push({ id: 'list', label: 'LISTE', icon: 'fa-list' });
+  }
+
+  navItems.push(
     { id: 'planning', label: 'PLANNING', icon: 'fa-calendar-alt' },
     { id: 'map', label: 'CARTE', icon: 'fa-map-marked-alt' },
-  ];
+  );
 
   if (isAdmin || isTechnician) {
     navItems.push({ id: 'stock', label: 'GESTION STOCK', icon: 'fa-boxes' });
@@ -419,7 +426,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
           >
             <i className={`fas ${item.icon} text-base mb-0.5`}></i>
             <span className="text-[8px] font-extrabold uppercase tracking-tight truncate max-w-[60px]">
-              {item.id === 'dashboard' ? 'Parc' : item.id === 'list' ? 'Liste' : item.id === 'planning' ? 'Planning' : 'Carte'}
+              {item.id === 'dashboard' ? 'Parc' : item.id === 'list' ? 'Liste' : item.id === 'planning' ? 'Planning' : item.id === 'map' ? 'Carte' : item.label}
             </span>
           </button>
         ))}

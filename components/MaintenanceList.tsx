@@ -154,7 +154,7 @@ const MaintenanceList: React.FC<Props> = ({ records, onDelete, onEdit, appUser, 
                           <p className="font-black text-slate-900 text-xs md:text-sm uppercase italic truncate">{record.customerName}</p>
                           <div className="flex items-center space-x-2">
                             <p className="text-[9px] md:text-[10px] text-slate-400 font-mono font-bold tracking-tight truncate">{record.model}</p>
-                            {record.clientPhone && (
+                            {record.clientPhone && appUser?.role !== 'client' && (
                               <a 
                                 href={`https://wa.me/${record.clientPhone.replace(/[^\d+]/g, '').replace('+', '')}`}
                                 target="_blank"
