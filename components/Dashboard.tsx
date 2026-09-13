@@ -823,11 +823,11 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                   </div>
                 </div>
 
-                {/* Action Buttons Grid (Masqué pour le rôle client) */}
-                {appUser?.role !== 'client' && (
-                  <div className="mt-auto pt-4 border-t border-slate-100">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">ACTIONS ET DOCUMENTS</p>
-                    
+                {/* Action Buttons Grid */}
+                <div className="mt-auto pt-4 border-t border-slate-100">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">ACTIONS ET DOCUMENTS</p>
+                  
+                  {appUser?.role !== 'client' ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       <button 
                         onClick={() => openInterventionModal(record)} 
@@ -878,81 +878,79 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                         <span>AUTO-COLLANT</span>
                       </button>
                     </div>
-                  </div>
-                )}
-
-                {/* Section exclusive pour le profil CLIENT : Relevé d'index sans altération d'autres données */}
-                {appUser?.role === 'client' && (
-                  <div className="mt-auto pt-4 border-t border-slate-100">
-                    <button
-                      type="button"
-                      onClick={() => openEditIndexModal(record)}
-                      className="w-full py-3.5 px-4 bg-[#2185D0] hover:bg-[#1a6fb0] text-white rounded-2xl font-black text-xs tracking-wider uppercase transition-all flex items-center justify-center space-x-2 shadow-md shadow-[#2185D0]/20 active:scale-98"
-                    >
-                      <i className="fas fa-tachometer-alt text-sm"></i>
-                      <span>ACTUALISER L'INDEX HORAIRE ({formatNumber(currentIndex)} H)</span>
-                    </button>
-                  </div>
-                )}
+                  ) : (
+                    <div>
+                      <button 
+                        onClick={() => onPrint('history', record)} 
+                        className="w-full py-3.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-extrabold text-[10px] tracking-wider uppercase transition-all flex items-center justify-center space-x-2 active:scale-95 border border-slate-200 shadow-xs"
+                      >
+                        <i className="fas fa-history text-xs text-[#2185D0]"></i>
+                        <span>HISTORIQUE</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
 
               </div>
 
-              {/* Technical Specifications Box (Fiche Technique) */}
-              <div className="bg-[#0F172A] p-6 text-white relative border-t border-slate-800">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-2">
-                    <i className="fas fa-wrench text-[#2185D0] text-sm"></i>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">FICHE TECHNIQUE MOTEUR</p>
+              {/* Technical Specifications Box (Fiche Technique Moteur - Masquée pour le client) */}
+              {appUser?.role !== 'client' && (
+                <div className="bg-[#0F172A] p-6 text-white relative border-t border-slate-800">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-2">
+                      <i className="fas fa-wrench text-[#2185D0] text-sm"></i>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">FICHE TECHNIQUE MOTEUR</p>
+                    </div>
+                    <span className="text-[9px] font-black text-slate-500 bg-slate-800/80 px-2 py-0.5 rounded-lg border border-slate-700">
+                      PIÈCES DE RECHANGE
+                    </span>
                   </div>
-                  <span className="text-[9px] font-black text-slate-500 bg-slate-800/80 px-2 py-0.5 rounded-lg border border-slate-700">
-                    PIÈCES DE RECHANGE
-                  </span>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800/80">
+                      <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">FILTRE AIR</p>
+                      <p className="text-[11px] font-black text-[#2185D0] uppercase font-mono tracking-tight truncate">
+                        {record.airFilterRef || 'N/A'}
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800/80">
+                      <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">FILTRE HUILE</p>
+                      <p className="text-[11px] font-black text-[#2185D0] uppercase font-mono tracking-tight truncate">
+                        {record.oilFilterRef || 'N/A'}
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800/80">
+                      <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">FILTRE GASOIL</p>
+                      <p className="text-[11px] font-black text-[#2185D0] uppercase font-mono tracking-tight truncate">
+                        {record.fuelFilterRef || 'N/A'}
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800/80">
+                      <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">COURROIE</p>
+                      <p className="text-[11px] font-black text-amber-400 uppercase font-mono tracking-tight truncate">
+                        {record.beltRef || 'N/A'}
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800/80">
+                      <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">SÉPARATEUR</p>
+                      <p className="text-[11px] font-black text-emerald-400 uppercase font-mono tracking-tight truncate">
+                        {record.separatorRef || 'N/A'}
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800/80">
+                      <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">CAPACITÉ HUILE</p>
+                      <p className="text-[11px] font-black text-emerald-400 uppercase font-mono tracking-tight truncate">
+                        {record.oilQuantity ? `${record.oilQuantity} L` : 'N/A'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800/80">
-                    <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">FILTRE AIR</p>
-                    <p className="text-[11px] font-black text-[#2185D0] uppercase font-mono tracking-tight truncate">
-                      {record.airFilterRef || 'N/A'}
-                    </p>
-                  </div>
-
-                  <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800/80">
-                    <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">FILTRE HUILE</p>
-                    <p className="text-[11px] font-black text-[#2185D0] uppercase font-mono tracking-tight truncate">
-                      {record.oilFilterRef || 'N/A'}
-                    </p>
-                  </div>
-
-                  <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800/80">
-                    <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">FILTRE GASOIL</p>
-                    <p className="text-[11px] font-black text-[#2185D0] uppercase font-mono tracking-tight truncate">
-                      {record.fuelFilterRef || 'N/A'}
-                    </p>
-                  </div>
-
-                  <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800/80">
-                    <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">COURROIE</p>
-                    <p className="text-[11px] font-black text-amber-400 uppercase font-mono tracking-tight truncate">
-                      {record.beltRef || 'N/A'}
-                    </p>
-                  </div>
-
-                  <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800/80">
-                    <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">SÉPARATEUR</p>
-                    <p className="text-[11px] font-black text-emerald-400 uppercase font-mono tracking-tight truncate">
-                      {record.separatorRef || 'N/A'}
-                    </p>
-                  </div>
-
-                  <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800/80">
-                    <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">CAPACITÉ HUILE</p>
-                    <p className="text-[11px] font-black text-emerald-400 uppercase font-mono tracking-tight truncate">
-                      {record.oilQuantity ? `${record.oilQuantity} L` : 'N/A'}
-                    </p>
-                  </div>
-                </div>
-              </div>
+              )}
 
             </div>
           );
