@@ -38,10 +38,14 @@ export interface MaintenanceRecord {
   oilQuantity: number;
   oilPrice: number;
   oilFilterPrice: number;
+  oilFilterQuantity?: number;
   fuelFilterPrice: number;
+  fuelFilterQuantity?: number;
   airFilterPrice: number;
+  airFilterQuantity?: number;
   separatorRef?: string;
   separatorPrice?: number;
+  separatorQuantity?: number;
   laborPrice: number;
   airFilterPrice2?: number; // For dual filters if needed
   beltPrice?: number;

@@ -15,9 +15,10 @@ interface Props {
   onBlankQuote?: () => void;
   appUser: AppUser | null;
   onUpdateCurrentIndex?: (recordId: string, newIndex: number) => Promise<void> | void;
+  onUpdateConsumables?: (recordId: string, data: { fuelFilterQuantity: number; oilFilterQuantity: number; separatorQuantity: number; oilQuantity: number }) => Promise<void> | void;
 }
 
-const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddIntervention, onExport, onBlankQuote, appUser, onUpdateCurrentIndex }) => {
+const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddIntervention, onExport, onBlankQuote, appUser, onUpdateCurrentIndex, onUpdateConsumables }) => {
   const [activeLogMachine, setActiveLogMachine] = useState<MaintenanceRecord | null>(null);
   const [notifyMachine, setNotifyMachine] = useState<MaintenanceRecord | null>(null);
   const [notifyMessage, setNotifyMessage] = useState<string>('');
@@ -25,6 +26,65 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
   const [copiedText, setCopiedText] = useState(false);
   const [isSavingPhone, setIsSavingPhone] = useState(false);
   const [savedPhoneSuccess, setSavedPhoneSuccess] = useState(false);
+
+  // Consommables & Tarification (Quantités) edit states
+  const [editingConsumablesMachine, setEditingConsumablesMachine] = useState<MaintenanceRecord | null>(null);
+  const [tempFuelFilterQty, setTempFuelFilterQty] = useState<string>('1');
+  const [tempOilFilterQty, setTempOilFilterQty] = useState<string>('1');
+  const [tempSeparatorQty, setTempSeparatorQty] = useState<string>('1');
+  const [tempOilQty, setTempOilQty] = useState<string>('0');
+  const [isSavingConsumables, setIsSavingConsumables] = useState(false);
+  const [consumablesSuccessMessage, setConsumablesSuccessMessage] = useState<string>('');
+  const [consumablesErrorMessage, setConsumablesErrorMessage] = useState<string>('');
+
+  const openEditConsumablesModal = (record: MaintenanceRecord) => {
+    setEditingConsumablesMachine(record);
+    setTempFuelFilterQty((record.fuelFilterQuantity !== undefined ? record.fuelFilterQuantity : 1).toString());
+    setTempOilFilterQty((record.oilFilterQuantity !== undefined ? record.oilFilterQuantity : 1).toString());
+    setTempSeparatorQty((record.separatorQuantity !== undefined ? record.separatorQuantity : 1).toString());
+    setTempOilQty((record.oilQuantity || 0).toString());
+    setConsumablesSuccessMessage('');
+    setConsumablesErrorMessage('');
+  };
+
+  const handleSaveConsumablesOnly = async () => {
+    if (!editingConsumablesMachine) return;
+    const fuelQty = Math.max(1, parseInt(tempFuelFilterQty) || 1);
+    const oilQty = Math.max(1, parseInt(tempOilFilterQty) || 1);
+    const sepQty = Math.max(1, parseInt(tempSeparatorQty) || 1);
+    const oilLiters = Math.max(0, parseFloat(tempOilQty) || 0);
+
+    setIsSavingConsumables(true);
+    setConsumablesErrorMessage('');
+    try {
+      if (onUpdateConsumables) {
+        await onUpdateConsumables(editingConsumablesMachine.id, {
+          fuelFilterQuantity: fuelQty,
+          oilFilterQuantity: oilQty,
+          separatorQuantity: sepQty,
+          oilQuantity: oilLiters
+        });
+      } else {
+        await updateDoc(doc(db, 'records', editingConsumablesMachine.id), {
+          fuelFilterQuantity: fuelQty,
+          oilFilterQuantity: oilQty,
+          separatorQuantity: sepQty,
+          oilQuantity: oilLiters,
+          lastUpdateDate: new Date().toISOString()
+        });
+      }
+      setConsumablesSuccessMessage("Quantités de consommables enregistrées avec succès.");
+      setTimeout(() => {
+        setEditingConsumablesMachine(null);
+        setConsumablesSuccessMessage('');
+      }, 1200);
+    } catch (err: any) {
+      console.error("Erreur lors de la mise à jour des consommables:", err);
+      setConsumablesErrorMessage(err?.message || "Erreur lors de la mise à jour des consommables.");
+    } finally {
+      setIsSavingConsumables(false);
+    }
+  };
 
   // Index Actuel edit states (pour client et techniciens, sans altérer aucune autre donnée)
   const [editingIndexMachine, setEditingIndexMachine] = useState<MaintenanceRecord | null>(null);
@@ -642,6 +702,13 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                           <i className="fas fa-pen text-xs"></i>
                         </button>
                         <button 
+                          onClick={() => openEditConsumablesModal(record)} 
+                          title="Modifier les quantités de consommables (Filtres & Huile)" 
+                          className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-[#2185D0] hover:bg-[#2185D0]/10 transition-all"
+                        >
+                          <i className="fas fa-sliders-h text-xs"></i>
+                        </button>
+                        <button 
                           onClick={() => onDelete(record.id)} 
                           title="Supprimer la fiche" 
                           className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all"
@@ -899,30 +966,53 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center space-x-2">
                       <i className="fas fa-wrench text-[#2185D0] text-sm"></i>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">FICHE TECHNIQUE MOTEUR</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">FICHE TECHNIQUE MOTEUR & CONSOMMABLES</p>
                     </div>
-                    <span className="text-[9px] font-black text-slate-500 bg-slate-800/80 px-2 py-0.5 rounded-lg border border-slate-700">
-                      PIÈCES DE RECHANGE
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => openEditConsumablesModal(record)}
+                      className="text-[9px] font-black text-[#2185D0] hover:text-white bg-[#2185D0]/15 hover:bg-[#2185D0] px-2.5 py-1 rounded-lg border border-[#2185D0]/30 transition-all flex items-center space-x-1.5"
+                      title="Modifier les quantités de consommables"
+                    >
+                      <i className="fas fa-sliders-h text-[9px]"></i>
+                      <span>MODIFIER QUANTITÉS</span>
+                    </button>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800/80">
-                      <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">FILTRE AIR</p>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest">FILTRE AIR</p>
+                        {record.airFilterQuantity && record.airFilterQuantity > 1 && (
+                          <span className="text-[8px] font-mono font-black text-slate-300 bg-slate-700/60 px-1 rounded">
+                            x{record.airFilterQuantity}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[11px] font-black text-[#2185D0] uppercase font-mono tracking-tight truncate">
                         {record.airFilterRef || 'N/A'}
                       </p>
                     </div>
 
                     <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800/80">
-                      <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">FILTRE HUILE</p>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest">FILTRE HUILE</p>
+                        <span className="text-[8px] font-mono font-black text-[#2185D0] bg-[#2185D0]/20 px-1 rounded">
+                          Qté: {record.oilFilterQuantity !== undefined ? record.oilFilterQuantity : 1}
+                        </span>
+                      </div>
                       <p className="text-[11px] font-black text-[#2185D0] uppercase font-mono tracking-tight truncate">
                         {record.oilFilterRef || 'N/A'}
                       </p>
                     </div>
 
                     <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800/80">
-                      <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">FILTRE GASOIL</p>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest">FILTRE GASOIL</p>
+                        <span className="text-[8px] font-mono font-black text-[#2185D0] bg-[#2185D0]/20 px-1 rounded">
+                          Qté: {record.fuelFilterQuantity !== undefined ? record.fuelFilterQuantity : 1}
+                        </span>
+                      </div>
                       <p className="text-[11px] font-black text-[#2185D0] uppercase font-mono tracking-tight truncate">
                         {record.fuelFilterRef || 'N/A'}
                       </p>
@@ -936,16 +1026,21 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                     </div>
 
                     <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800/80">
-                      <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">SÉPARATEUR</p>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest">DÉCOMPTEUR</p>
+                        <span className="text-[8px] font-mono font-black text-emerald-400 bg-emerald-500/20 px-1 rounded">
+                          Qté: {record.separatorQuantity !== undefined ? record.separatorQuantity : 1}
+                        </span>
+                      </div>
                       <p className="text-[11px] font-black text-emerald-400 uppercase font-mono tracking-tight truncate">
                         {record.separatorRef || 'N/A'}
                       </p>
                     </div>
 
                     <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800/80">
-                      <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">CAPACITÉ HUILE</p>
+                      <p className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">QUANTITÉ HUILE</p>
                       <p className="text-[11px] font-black text-emerald-400 uppercase font-mono tracking-tight truncate">
-                        {record.oilQuantity ? `${record.oilQuantity} L` : 'N/A'}
+                        {record.oilQuantity ? `${record.oilQuantity} L` : '0 L'}
                       </p>
                     </div>
                   </div>
@@ -1617,6 +1712,215 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                     <>
                       <i className="fas fa-check text-xs"></i>
                       <span>Valider l'Index</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Dédié : Modification Exclusive des Quantités de Consommables */}
+      {editingConsumablesMachine && (
+        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 my-auto animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-5 md:p-6 bg-slate-900 text-white flex justify-between items-center">
+              <div className="flex items-center space-x-3.5">
+                <div className="w-11 h-11 bg-[#2185D0] rounded-2xl flex items-center justify-center text-white shadow-md shadow-[#2185D0]/30">
+                  <i className="fas fa-sliders-h text-lg"></i>
+                </div>
+                <div>
+                  <h3 className="font-black text-base md:text-lg uppercase tracking-tight">Consommables & Tarification</h3>
+                  <p className="text-slate-400 text-xs font-medium">
+                    Mise à jour des quantités uniquement
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setEditingConsumablesMachine(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all"
+              >
+                <i className="fas fa-times text-xs"></i>
+              </button>
+            </div>
+
+            {/* Corps */}
+            <div className="p-5 md:p-6 space-y-5">
+              {/* Info machine */}
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-black text-slate-900 uppercase italic">
+                    {editingConsumablesMachine.customerName}
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-500 font-mono">
+                    {editingConsumablesMachine.model} {editingConsumablesMachine.site ? `• ${editingConsumablesMachine.site}` : ''}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-black text-[#2185D0] bg-[#2185D0]/10 px-2 py-0.5 rounded-full border border-[#2185D0]/20 uppercase">
+                    Consommables
+                  </span>
+                </div>
+              </div>
+
+              {/* 4 champs de quantités */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {/* 1. Filtre à Gasoil */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-700">
+                      Filtre à Gasoil
+                    </label>
+                    <span className="text-[9px] font-mono font-bold text-slate-400 truncate max-w-[110px]" title={editingConsumablesMachine.fuelFilterRef}>
+                      {editingConsumablesMachine.fuelFilterRef || 'Std'}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={tempFuelFilterQty}
+                      onChange={(e) => setTempFuelFilterQty(e.target.value)}
+                      className="w-full bg-white border-2 border-slate-200 focus:border-[#2185D0] rounded-xl px-3 py-2 text-slate-900 font-mono text-sm font-black focus:outline-none transition-all pr-14"
+                      placeholder="1"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none">
+                      unité(s)
+                    </span>
+                  </div>
+                </div>
+
+                {/* 2. Filtre à Huile */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-700">
+                      Filtre à Huile
+                    </label>
+                    <span className="text-[9px] font-mono font-bold text-slate-400 truncate max-w-[110px]" title={editingConsumablesMachine.oilFilterRef}>
+                      {editingConsumablesMachine.oilFilterRef || 'Std'}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={tempOilFilterQty}
+                      onChange={(e) => setTempOilFilterQty(e.target.value)}
+                      className="w-full bg-white border-2 border-slate-200 focus:border-[#2185D0] rounded-xl px-3 py-2 text-slate-900 font-mono text-sm font-black focus:outline-none transition-all pr-14"
+                      placeholder="1"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none">
+                      unité(s)
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Filtre Décompteur (Séparateur) */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-700">
+                      Filtre Décompteur
+                    </label>
+                    <span className="text-[9px] font-mono font-bold text-slate-400 truncate max-w-[110px]" title={editingConsumablesMachine.separatorRef}>
+                      {editingConsumablesMachine.separatorRef || 'Std'}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={tempSeparatorQty}
+                      onChange={(e) => setTempSeparatorQty(e.target.value)}
+                      className="w-full bg-white border-2 border-slate-200 focus:border-[#2185D0] rounded-xl px-3 py-2 text-slate-900 font-mono text-sm font-black focus:outline-none transition-all pr-14"
+                      placeholder="1"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none">
+                      unité(s)
+                    </span>
+                  </div>
+                </div>
+
+                {/* 4. Quantité d'Huile */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-700">
+                      Quantité d'Huile
+                    </label>
+                    <span className="text-[9px] font-mono font-bold text-slate-400 truncate max-w-[110px]" title={editingConsumablesMachine.oilRef}>
+                      {editingConsumablesMachine.oilRef || 'Moteur'}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={tempOilQty}
+                      onChange={(e) => setTempOilQty(e.target.value)}
+                      className="w-full bg-white border-2 border-slate-200 focus:border-[#2185D0] rounded-xl px-3 py-2 text-slate-900 font-mono text-sm font-black focus:outline-none transition-all pr-14"
+                      placeholder="0"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none">
+                      Litres
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Garantie d'intégrité des données */}
+              <div className="p-3.5 bg-blue-50/70 rounded-2xl border border-blue-100 flex items-start space-x-2.5">
+                <i className="fas fa-shield-alt text-[#2185D0] mt-0.5 text-sm shrink-0"></i>
+                <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
+                  <strong>Sécurité des données :</strong> Seules les quantités de ces 4 consommables seront mises à jour. Les références, prix unitaires, historique d'interventions, index horaire et données techniques restent strictement inchangés.
+                </p>
+              </div>
+
+              {/* Messages d'état */}
+              {consumablesErrorMessage && (
+                <div className="p-3 bg-red-50 text-red-700 text-xs font-bold rounded-xl border border-red-200 flex items-center space-x-2">
+                  <i className="fas fa-exclamation-circle text-red-500"></i>
+                  <span>{consumablesErrorMessage}</span>
+                </div>
+              )}
+
+              {consumablesSuccessMessage && (
+                <div className="p-3 bg-emerald-50 text-emerald-800 text-xs font-bold rounded-xl border border-emerald-200 flex items-center space-x-2">
+                  <i className="fas fa-check-circle text-emerald-600"></i>
+                  <span>{consumablesSuccessMessage}</span>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex items-center space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingConsumablesMachine(null)}
+                  disabled={isSavingConsumables}
+                  className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-wider rounded-xl transition-all"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveConsumablesOnly}
+                  disabled={isSavingConsumables}
+                  className="flex-1 py-3.5 bg-[#2185D0] hover:bg-[#1a6fb0] disabled:opacity-50 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md shadow-[#2185D0]/20 transition-all flex items-center justify-center space-x-2 active:scale-95"
+                >
+                  {isSavingConsumables ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin text-xs"></i>
+                      <span>Enregistrement...</span>
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-check text-xs"></i>
+                      <span>Enregistrer les Quantités</span>
                     </>
                   )}
                 </button>

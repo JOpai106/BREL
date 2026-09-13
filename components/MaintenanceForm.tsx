@@ -81,9 +81,13 @@ const MaintenanceForm: React.FC<Props> = ({ onSave, initialData }) => {
     oilQuantity: initialData?.oilQuantity || 0,
     oilPrice: initialData?.oilPrice || 0,
     oilFilterPrice: initialData?.oilFilterPrice || 0,
+    oilFilterQuantity: initialData?.oilFilterQuantity !== undefined ? initialData.oilFilterQuantity : 1,
     fuelFilterPrice: initialData?.fuelFilterPrice || 0,
+    fuelFilterQuantity: initialData?.fuelFilterQuantity !== undefined ? initialData.fuelFilterQuantity : 1,
     airFilterPrice: initialData?.airFilterPrice || 0,
+    airFilterQuantity: initialData?.airFilterQuantity !== undefined ? initialData.airFilterQuantity : 1,
     separatorPrice: initialData?.separatorPrice || 0,
+    separatorQuantity: initialData?.separatorQuantity !== undefined ? initialData.separatorQuantity : 1,
     laborPrice: initialData?.laborPrice || 0,
     lat: initialData?.lat || undefined,
     lng: initialData?.lng || undefined,
@@ -188,9 +192,13 @@ const MaintenanceForm: React.FC<Props> = ({ onSave, initialData }) => {
         oilQuantity: 0,
         oilPrice: 0,
         oilFilterPrice: 0,
+        oilFilterQuantity: 1,
         fuelFilterPrice: 0,
+        fuelFilterQuantity: 1,
         airFilterPrice: 0,
+        airFilterQuantity: 1,
         separatorPrice: 0,
+        separatorQuantity: 1,
         laborPrice: 0,
         lat: undefined,
         lng: undefined,
@@ -286,16 +294,32 @@ const MaintenanceForm: React.FC<Props> = ({ onSave, initialData }) => {
         </div>
 
         <div className="p-4 md:p-8 bg-slate-50/50 rounded-xl md:rounded-2xl border border-slate-100">
-          <h4 className="text-[9px] md:text-[10px] font-black text-[#2185D0] uppercase tracking-[0.2em] mb-4 md:mb-6">Consommables & Tarification (FCFA)</h4>
+          <div className="flex items-center justify-between mb-4 md:mb-6">
+            <h4 className="text-[9px] md:text-[10px] font-black text-[#2185D0] uppercase tracking-[0.2em]">Consommables & Tarification (FCFA)</h4>
+            <span className="text-[9px] md:text-[10px] font-bold text-slate-400 bg-white px-2.5 py-1 rounded-lg border border-slate-200/60">Quantités & Réf.</span>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-8">
             <div className="space-y-4">
               <div>
                 <label className={labelClass}>Filtre Huile</label>
                 <RefInput value={formData.oilFilterRef} field="oilFilterRef" label="Huile" formData={formData} setFormData={setFormData} getModelMapping={getModelMapping} ALL_REFS={ALL_REFS} inputClass={inputClass} />
               </div>
-              <div>
-                <label className={labelClass}>Prix Unit. Filtre Huile</label>
-                <input type="number" value={formData.oilFilterPrice} onChange={(e) => setFormData({ ...formData, oilFilterPrice: parseInt(e.target.value) || 0 })} className={inputClass} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Qté F. Huile</label>
+                  <input 
+                    type="number" 
+                    min="1" 
+                    step="1" 
+                    value={formData.oilFilterQuantity} 
+                    onChange={(e) => setFormData({ ...formData, oilFilterQuantity: Math.max(1, parseInt(e.target.value) || 1) })} 
+                    className={inputClass} 
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Prix Unit. (FCFA)</label>
+                  <input type="number" value={formData.oilFilterPrice} onChange={(e) => setFormData({ ...formData, oilFilterPrice: parseInt(e.target.value) || 0 })} className={inputClass} />
+                </div>
               </div>
             </div>
             <div className="space-y-4">
@@ -303,9 +327,22 @@ const MaintenanceForm: React.FC<Props> = ({ onSave, initialData }) => {
                 <label className={labelClass}>Filtre Gasoil</label>
                 <RefInput value={formData.fuelFilterRef} field="fuelFilterRef" label="Gasoil" formData={formData} setFormData={setFormData} getModelMapping={getModelMapping} ALL_REFS={ALL_REFS} inputClass={inputClass} />
               </div>
-              <div>
-                <label className={labelClass}>Prix Unit. Filtre Gasoil</label>
-                <input type="number" value={formData.fuelFilterPrice} onChange={(e) => setFormData({ ...formData, fuelFilterPrice: parseInt(e.target.value) || 0 })} className={inputClass} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Qté F. Gasoil</label>
+                  <input 
+                    type="number" 
+                    min="1" 
+                    step="1" 
+                    value={formData.fuelFilterQuantity} 
+                    onChange={(e) => setFormData({ ...formData, fuelFilterQuantity: Math.max(1, parseInt(e.target.value) || 1) })} 
+                    className={inputClass} 
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Prix Unit. (FCFA)</label>
+                  <input type="number" value={formData.fuelFilterPrice} onChange={(e) => setFormData({ ...formData, fuelFilterPrice: parseInt(e.target.value) || 0 })} className={inputClass} />
+                </div>
               </div>
             </div>
             <div className="space-y-4 sm:col-span-2 lg:col-span-1">
@@ -313,29 +350,55 @@ const MaintenanceForm: React.FC<Props> = ({ onSave, initialData }) => {
                 <label className={labelClass}>Filtre Air</label>
                 <RefInput value={formData.airFilterRef} field="airFilterRef" label="Air" formData={formData} setFormData={setFormData} getModelMapping={getModelMapping} ALL_REFS={ALL_REFS} inputClass={inputClass} />
               </div>
-              <div>
-                <label className={labelClass}>Prix Unit. Filtre Air</label>
-                <input type="number" value={formData.airFilterPrice} onChange={(e) => setFormData({ ...formData, airFilterPrice: parseInt(e.target.value) || 0 })} className={inputClass} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Qté F. Air</label>
+                  <input 
+                    type="number" 
+                    min="1" 
+                    step="1" 
+                    value={formData.airFilterQuantity} 
+                    onChange={(e) => setFormData({ ...formData, airFilterQuantity: Math.max(1, parseInt(e.target.value) || 1) })} 
+                    className={inputClass} 
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Prix Unit. (FCFA)</label>
+                  <input type="number" value={formData.airFilterPrice} onChange={(e) => setFormData({ ...formData, airFilterPrice: parseInt(e.target.value) || 0 })} className={inputClass} />
+                </div>
               </div>
             </div>
             <div className="space-y-4">
               <div>
-                <label className={labelClass}>Décompteur</label>
+                <label className={labelClass}>Filtre Décompteur (Séparateur)</label>
                 <RefInput value={formData.separatorRef} field="separatorRef" label="Décompteur" formData={formData} setFormData={setFormData} getModelMapping={getModelMapping} ALL_REFS={ALL_REFS} inputClass={inputClass} />
               </div>
-              <div>
-                <label className={labelClass}>Prix Unit. Décompteur</label>
-                <input type="number" value={formData.separatorPrice} onChange={(e) => setFormData({ ...formData, separatorPrice: parseInt(e.target.value) || 0 })} className={inputClass} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Qté Décompteur</label>
+                  <input 
+                    type="number" 
+                    min="1" 
+                    step="1" 
+                    value={formData.separatorQuantity} 
+                    onChange={(e) => setFormData({ ...formData, separatorQuantity: Math.max(1, parseInt(e.target.value) || 1) })} 
+                    className={inputClass} 
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Prix Unit. (FCFA)</label>
+                  <input type="number" value={formData.separatorPrice} onChange={(e) => setFormData({ ...formData, separatorPrice: parseInt(e.target.value) || 0 })} className={inputClass} />
+                </div>
               </div>
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-8 mt-6 md:mt-8 pt-6 md:pt-8 border-t border-slate-200">
             <div>
-              <label className={labelClass}>Huile (Litres)</label>
-              <input type="number" step="0.5" value={formData.oilQuantity} onChange={(e) => setFormData({ ...formData, oilQuantity: parseFloat(e.target.value) || 0 })} className={inputClass} />
+              <label className={labelClass}>Quantité Huile (Litres)</label>
+              <input type="number" step="0.5" min="0" value={formData.oilQuantity} onChange={(e) => setFormData({ ...formData, oilQuantity: parseFloat(e.target.value) || 0 })} className={inputClass} />
             </div>
             <div>
-              <label className={labelClass}>Prix Huile (L)</label>
+              <label className={labelClass}>Prix Huile (L - FCFA)</label>
               <input type="number" value={formData.oilPrice} onChange={(e) => setFormData({ ...formData, oilPrice: parseInt(e.target.value) || 0 })} className={inputClass} />
             </div>
             <div className="space-y-4 sm:col-span-2 lg:col-span-1">
@@ -344,7 +407,7 @@ const MaintenanceForm: React.FC<Props> = ({ onSave, initialData }) => {
                 <RefInput value={formData.oilRef} field="oilRef" label="Huile" formData={formData} setFormData={setFormData} getModelMapping={getModelMapping} ALL_REFS={ALL_REFS} inputClass={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Prix Main d'œuvre</label>
+                <label className={labelClass}>Prix Main d'œuvre (FCFA)</label>
                 <input type="number" value={formData.laborPrice} onChange={(e) => setFormData({ ...formData, laborPrice: parseInt(e.target.value) || 0 })} className={inputClass} />
               </div>
             </div>

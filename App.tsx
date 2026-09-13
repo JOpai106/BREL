@@ -694,6 +694,46 @@ const App: React.FC = () => {
     }
   };
 
+  const handleUpdateConsumablesQuantities = async (
+    recordId: string, 
+    quantities: { fuelFilterQuantity: number; oilFilterQuantity: number; separatorQuantity: number; oilQuantity: number }
+  ) => {
+    const target = records.find(r => r.id === recordId);
+    if (!target) return;
+    const now = new Date().toISOString();
+
+    const cleanFuelQty = Math.max(1, Math.round(quantities.fuelFilterQuantity) || 1);
+    const cleanOilFilterQty = Math.max(1, Math.round(quantities.oilFilterQuantity) || 1);
+    const cleanSeparatorQty = Math.max(1, Math.round(quantities.separatorQuantity) || 1);
+    const cleanOilQty = Math.max(0, parseFloat(Number(quantities.oilQuantity).toFixed(2)) || 0);
+
+    const updatedRecord: MaintenanceRecord = {
+      ...target,
+      fuelFilterQuantity: cleanFuelQty,
+      oilFilterQuantity: cleanOilFilterQty,
+      separatorQuantity: cleanSeparatorQty,
+      oilQuantity: cleanOilQty,
+      lastUpdateDate: now
+    };
+
+    // Optimistic UI update
+    setRecords(prev => prev.map(r => r.id === recordId ? updatedRecord : r));
+
+    try {
+      // Met à jour EXCLUSIVEMENT les quantités de consommables et la date, sans altérer aucune autre donnée
+      await updateDoc(doc(db, 'records', recordId), {
+        fuelFilterQuantity: cleanFuelQty,
+        oilFilterQuantity: cleanOilFilterQty,
+        separatorQuantity: cleanSeparatorQty,
+        oilQuantity: cleanOilQty,
+        lastUpdateDate: now
+      });
+    } catch (err) {
+      console.error("Erreur mise à jour quantités consommables:", err);
+      handleFirestoreError(err, OperationType.WRITE, 'records');
+    }
+  };
+
   const deleteArchivedDoc = (id: string) => {
     setDeleteConfirmData({ type: 'archive', count: 1, ids: [id] });
   };
@@ -764,11 +804,16 @@ const App: React.FC = () => {
   const archiveDocument = async (type: 'quote' | 'invoice', record: MaintenanceRecord) => {
     if (!user) return;
 
-    const oilTotal = record.oilQuantity * record.oilPrice;
-    const oilFilterPrice = record.oilFilterPrice > 0 ? record.oilFilterPrice : 0;
-    const fuelFilterPrice = record.fuelFilterPrice > 0 ? record.fuelFilterPrice : 0;
-    const airFilterPrice = record.airFilterPrice > 0 ? record.airFilterPrice : 0;
-    const separatorPrice = record.separatorPrice && record.separatorPrice > 0 ? record.separatorPrice : 0;
+    const oilFilterQty = record.oilFilterQuantity !== undefined ? record.oilFilterQuantity : 1;
+    const fuelFilterQty = record.fuelFilterQuantity !== undefined ? record.fuelFilterQuantity : 1;
+    const airFilterQty = record.airFilterQuantity !== undefined ? record.airFilterQuantity : 1;
+    const separatorQty = record.separatorQuantity !== undefined ? record.separatorQuantity : 1;
+
+    const oilTotal = (record.oilQuantity || 0) * (record.oilPrice || 0);
+    const oilFilterPrice = (record.oilFilterPrice > 0 ? record.oilFilterPrice : 0) * oilFilterQty;
+    const fuelFilterPrice = (record.fuelFilterPrice > 0 ? record.fuelFilterPrice : 0) * fuelFilterQty;
+    const airFilterPrice = (record.airFilterPrice > 0 ? record.airFilterPrice : 0) * airFilterQty;
+    const separatorPrice = (record.separatorPrice && record.separatorPrice > 0 ? record.separatorPrice : 0) * separatorQty;
     const laborPrice = record.laborPrice || 0;
     
     const totalHT = oilFilterPrice + fuelFilterPrice + airFilterPrice + separatorPrice + oilTotal + laborPrice;
@@ -1154,11 +1199,16 @@ const App: React.FC = () => {
         }
       });
     } else {
-      oilTotal = record.oilQuantity * record.oilPrice;
-      const oilFilterPrice = record.oilFilterPrice > 0 ? record.oilFilterPrice : 0;
-      const fuelFilterPrice = record.fuelFilterPrice > 0 ? record.fuelFilterPrice : 0;
-      const airFilterPrice = record.airFilterPrice > 0 ? record.airFilterPrice : 0;
-      const separatorPrice = record.separatorPrice && record.separatorPrice > 0 ? record.separatorPrice : 0;
+      const oilFilterQty = record.oilFilterQuantity !== undefined ? record.oilFilterQuantity : 1;
+      const fuelFilterQty = record.fuelFilterQuantity !== undefined ? record.fuelFilterQuantity : 1;
+      const airFilterQty = record.airFilterQuantity !== undefined ? record.airFilterQuantity : 1;
+      const separatorQty = record.separatorQuantity !== undefined ? record.separatorQuantity : 1;
+
+      oilTotal = (record.oilQuantity || 0) * (record.oilPrice || 0);
+      const oilFilterPrice = (record.oilFilterPrice > 0 ? record.oilFilterPrice : 0) * oilFilterQty;
+      const fuelFilterPrice = (record.fuelFilterPrice > 0 ? record.fuelFilterPrice : 0) * fuelFilterQty;
+      const airFilterPrice = (record.airFilterPrice > 0 ? record.airFilterPrice : 0) * airFilterQty;
+      const separatorPrice = (record.separatorPrice && record.separatorPrice > 0 ? record.separatorPrice : 0) * separatorQty;
       const laborPrice = record.laborPrice || 0;
       totalHT = oilFilterPrice + fuelFilterPrice + airFilterPrice + separatorPrice + oilTotal + laborPrice;
     }
@@ -1401,36 +1451,36 @@ const App: React.FC = () => {
                       <tr className="text-[11px] font-bold text-slate-900">
                         <td className="p-4 pl-4 uppercase font-black">Filtre à Huile</td>
                         <td className="p-4 text-center text-slate-500">{record.oilFilterRef || '-'}</td>
-                        <td className="p-4 text-center">1</td>
+                        <td className="p-4 text-center">{record.oilFilterQuantity !== undefined ? record.oilFilterQuantity : 1}</td>
                         <td className="p-4 text-center">{formatNumber(record.oilFilterPrice)}</td>
-                        <td className="p-4 pr-4 text-right font-black">{formatNumber(record.oilFilterPrice)}</td>
+                        <td className="p-4 pr-4 text-right font-black">{formatNumber(record.oilFilterPrice * (record.oilFilterQuantity !== undefined ? record.oilFilterQuantity : 1))}</td>
                       </tr>
                     )}
                     {(record.fuelFilterPrice > 0 || isBlank) && (
                       <tr className="text-[11px] font-bold text-slate-900">
                         <td className="p-4 pl-4 uppercase font-black">Filtre à Gasoil</td>
                         <td className="p-4 text-center text-slate-500">{record.fuelFilterRef || '-'}</td>
-                        <td className="p-4 text-center">1</td>
+                        <td className="p-4 text-center">{record.fuelFilterQuantity !== undefined ? record.fuelFilterQuantity : 1}</td>
                         <td className="p-4 text-center">{formatNumber(record.fuelFilterPrice)}</td>
-                        <td className="p-4 pr-4 text-right font-black">{formatNumber(record.fuelFilterPrice)}</td>
+                        <td className="p-4 pr-4 text-right font-black">{formatNumber(record.fuelFilterPrice * (record.fuelFilterQuantity !== undefined ? record.fuelFilterQuantity : 1))}</td>
                       </tr>
                     )}
                     {(record.airFilterPrice > 0 || isBlank) && (
                       <tr className="text-[11px] font-bold text-slate-900">
                         <td className="p-4 pl-4 uppercase font-black">Filtre à Air</td>
                         <td className="p-4 text-center text-slate-500">{record.airFilterRef || '-'}</td>
-                        <td className="p-4 text-center">1</td>
+                        <td className="p-4 text-center">{record.airFilterQuantity !== undefined ? record.airFilterQuantity : 1}</td>
                         <td className="p-4 text-center">{formatNumber(record.airFilterPrice)}</td>
-                        <td className="p-4 pr-4 text-right font-black">{formatNumber(record.airFilterPrice)}</td>
+                        <td className="p-4 pr-4 text-right font-black">{formatNumber(record.airFilterPrice * (record.airFilterQuantity !== undefined ? record.airFilterQuantity : 1))}</td>
                       </tr>
                     )}
                     {(record.separatorPrice > 0 || isBlank) && (
                       <tr className="text-[11px] font-bold text-slate-900">
                         <td className="p-4 pl-4 uppercase font-black">Décompteur</td>
                         <td className="p-4 text-center text-slate-500">{record.separatorRef || '-'}</td>
-                        <td className="p-4 text-center">1</td>
+                        <td className="p-4 text-center">{record.separatorQuantity !== undefined ? record.separatorQuantity : 1}</td>
                         <td className="p-4 text-center">{formatNumber(record.separatorPrice)}</td>
-                        <td className="p-4 pr-4 text-right font-black">{formatNumber(record.separatorPrice)}</td>
+                        <td className="p-4 pr-4 text-right font-black">{formatNumber((record.separatorPrice || 0) * (record.separatorQuantity !== undefined ? record.separatorQuantity : 1))}</td>
                       </tr>
                     )}
                     {(record.oilPrice > 0 || isBlank) && (
@@ -1906,6 +1956,7 @@ const App: React.FC = () => {
               onExport={handleExportData}
               onBlankQuote={handleBlankQuote}
               onUpdateCurrentIndex={handleUpdateCurrentIndex}
+              onUpdateConsumables={handleUpdateConsumablesQuantities}
             />
           )}
           {activeTab === 'add' && (appUser?.role === 'admin' || appUser?.role === 'technician' || !appUser) && (
@@ -1923,6 +1974,7 @@ const App: React.FC = () => {
               onEdit={handleEdit} 
               appUser={appUser}
               onUpdateCurrentIndex={handleUpdateCurrentIndex}
+              onUpdateConsumables={handleUpdateConsumablesQuantities}
             />
           )}
           {activeTab === 'planning' && (
