@@ -39,9 +39,9 @@ const App: React.FC = () => {
   const [docSearch, setDocSearch] = useState('');
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   
-  // Pour le client, l'onglet liste n'est pas accessible
+  // Pour le client, les onglets liste, archives/documents et utilisateurs ne sont pas accessibles
   useEffect(() => {
-    if (appUser?.role === 'client' && activeTab === 'list') {
+    if (appUser?.role === 'client' && (activeTab === 'list' || activeTab === 'documents' || activeTab === 'users')) {
       setActiveTab('dashboard');
     }
   }, [appUser?.role, activeTab]);
@@ -2067,7 +2067,7 @@ const App: React.FC = () => {
               </div>
             </div>
           )}
-          {activeTab === 'documents' && (
+          {activeTab === 'documents' && appUser?.role !== 'client' && (
             <div className="space-y-8 animate-in fade-in duration-500">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>

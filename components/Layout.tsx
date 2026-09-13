@@ -60,7 +60,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
     { id: 'dashboard', label: 'PARC', icon: 'fa-charging-station' },
   ];
 
-  // Le bouton "LISTE" n'est pas affiché pour les comptes clients
+  // Les boutons "LISTE" et "ARCHIVES DOCS" ne sont pas affichés pour les comptes clients
   if (!isClient) {
     navItems.push({ id: 'list', label: 'LISTE', icon: 'fa-list' });
   }
@@ -75,10 +75,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
     navItems.push({ id: 'ai-insights', label: 'CONSEILS IA', icon: 'fa-brain' });
   }
 
-  navItems.push({ id: 'documents', label: 'ARCHIVES DOCS', icon: 'fa-folder-open' });
+  // Le bouton "ARCHIVES DOCS" n'est pas affiché pour les comptes clients
+  if (!isClient) {
+    navItems.push({ id: 'documents', label: 'ARCHIVES DOCS', icon: 'fa-folder-open' });
+  }
+
   navItems.push({ id: 'profile', label: 'MON COMPTE', icon: 'fa-user-circle' });
 
-  if (isAdmin) {
+  // Le bouton "UTILISATEURS" n'est pas affiché pour les comptes clients (uniquement administrateur)
+  if (isAdmin && !isClient) {
     navItems.push({ id: 'users', label: 'UTILISATEURS', icon: 'fa-users-cog' });
     navItems.push({ id: 'reports', label: 'RAPPORTS', icon: 'fa-file-chart-line' });
   }
