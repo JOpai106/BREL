@@ -114,11 +114,41 @@ const App: React.FC = () => {
     setAuthError('');
     setAuthSuccess('');
     setAuthLoading(true);
+    const cleanEmail = email.trim().toLowerCase();
+
     try {
       if (isRegistering) {
-        await registerWithEmail(email, password);
+        await registerWithEmail(cleanEmail, password);
       } else {
-        await loginWithEmail(email, password);
+        try {
+          await loginWithEmail(cleanEmail, password);
+        } catch (loginErr: any) {
+          // Si les identifiants sont rejetés (auth/invalid-credential ou auth/user-not-found),
+          // vérifions s'il s'agit d'un premier accès (compte pré-autorisé non encore créé dans Firebase Auth)
+          if (loginErr.code === 'auth/invalid-credential' || loginErr.code === 'auth/user-not-found') {
+            try {
+              // Tentative automatique de création du compte pour les utilisateurs invités/nouveaux
+              await registerWithEmail(cleanEmail, password);
+              setIsRateLimited(false);
+              return;
+            } catch (regErr: any) {
+              if (regErr.code === 'auth/email-already-in-use') {
+                // Le compte existe bien dans Firebase Auth : le mot de passe saisi est donc incorrect
+                setIsRateLimited(false);
+                setAuthError("Mot de passe incorrect pour cette adresse email. Si vous l'avez oublié, cliquez sur « Mot de passe oublié ? » pour recevoir un lien de réinitialisation sécurisé.");
+                return;
+              } else if (regErr.code === 'auth/weak-password') {
+                setIsRateLimited(false);
+                setAuthError("Le mot de passe doit comporter au moins 6 caractères.");
+                return;
+              }
+              // Relancer l'erreur de connexion initiale
+              throw loginErr;
+            }
+          } else {
+            throw loginErr;
+          }
+        }
       }
       setIsRateLimited(false);
     } catch (err: any) {
@@ -309,17 +339,29 @@ const App: React.FC = () => {
             }
             setAppUser(userData);
           } else {
-            const q = query(collection(db, 'users'), where('email', '==', u.email), limit(1));
+            const cleanUserEmail = (u.email || '').toLowerCase().trim();
+            const q = query(collection(db, 'users'), where('email', '==', cleanUserEmail), limit(1));
             const preAuthSnap = await getDocs(q).catch(() => ({ empty: true } as any));
             
+            let matchedPreAuthDoc: { id: string; data: AppUser } | null = null;
             if (preAuthSnap && !preAuthSnap.empty) {
-              const preAuthDoc = preAuthSnap.docs[0];
-              const preAuthData = preAuthDoc.data() as AppUser;
-              optimisticUser.role = preAuthData.role;
+              const docSnap = preAuthSnap.docs[0];
+              matchedPreAuthDoc = { id: docSnap.id, data: docSnap.data() as AppUser };
+            } else {
+              // Vérification directe de l'ID pending_ créé par le gestionnaire d'utilisateurs
+              const pendingDocId = `pending_${cleanUserEmail.replace(/\./g, '_')}`;
+              const pendingDocSnap = await getDoc(doc(db, 'users', pendingDocId)).catch(() => null);
+              if (pendingDocSnap && pendingDocSnap.exists()) {
+                matchedPreAuthDoc = { id: pendingDocSnap.id, data: pendingDocSnap.data() as AppUser };
+              }
+            }
+
+            if (matchedPreAuthDoc) {
+              optimisticUser.role = matchedPreAuthDoc.data.role || 'client';
               setAppUser({ ...optimisticUser });
               await setDoc(userRef, optimisticUser).catch(() => {});
-              if (preAuthDoc.id !== u.uid) {
-                await deleteDoc(doc(db, 'users', preAuthDoc.id)).catch(() => {});
+              if (matchedPreAuthDoc.id !== u.uid) {
+                await deleteDoc(doc(db, 'users', matchedPreAuthDoc.id)).catch(() => {});
               }
             } else {
               await setDoc(userRef, optimisticUser).catch(() => {});
@@ -1864,28 +1906,55 @@ const App: React.FC = () => {
                       <p className="text-red-700 text-xs font-medium leading-relaxed">
                         {authError}
                       </p>
-                      {isRateLimited && (
-                        <div className="mt-3 pt-2.5 border-t border-red-100 flex flex-wrap items-center gap-2">
+                      
+                      {/* Actions rapides contextuelles d'aide à la connexion */}
+                      <div className="mt-3 pt-2.5 border-t border-red-100 flex flex-wrap items-center gap-2">
+                        {!isRegistering ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsRegistering(true);
+                                setAuthError('');
+                              }}
+                              className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-[#2185D0] hover:bg-[#1a6fb0] text-white rounded-xl text-[11px] font-bold tracking-wide transition-colors shadow-sm"
+                            >
+                              <i className="fas fa-user-plus text-[9px]"></i>
+                              <span>Créer mon accès / mot de passe</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleForgotPassword}
+                              disabled={authLoading}
+                              className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-red-200 hover:bg-red-50 text-red-700 rounded-xl text-[11px] font-bold tracking-wide transition-colors disabled:opacity-50"
+                            >
+                              <i className="fas fa-key text-[9px]"></i>
+                              <span>Mot de passe oublié ?</span>
+                            </button>
+                          </>
+                        ) : (
                           <button
                             type="button"
-                            onClick={handleForgotPassword}
-                            disabled={authLoading}
-                            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-[11px] font-bold tracking-wide transition-colors shadow-sm disabled:opacity-50"
+                            onClick={() => {
+                              setIsRegistering(false);
+                              setAuthError('');
+                            }}
+                            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-[#2185D0] hover:bg-[#1a6fb0] text-white rounded-xl text-[11px] font-bold tracking-wide transition-colors shadow-sm"
                           >
-                            <i className="fas fa-paper-plane text-[9px]"></i>
-                            <span>Envoyer lien de déblocage par email</span>
+                            <i className="fas fa-sign-in-alt text-[9px]"></i>
+                            <span>Aller à la connexion</span>
                           </button>
-                          <button
-                            type="button"
-                            onClick={handleGoogleLogin}
-                            disabled={authLoading}
-                            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-red-200 hover:bg-red-50 text-red-800 rounded-xl text-[11px] font-bold tracking-wide transition-colors disabled:opacity-50"
-                          >
-                            <i className="fab fa-google text-[10px]"></i>
-                            <span>Connexion Google immédiate</span>
-                          </button>
-                        </div>
-                      )}
+                        )}
+                        <button
+                          type="button"
+                          onClick={handleGoogleLogin}
+                          disabled={authLoading}
+                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-[11px] font-bold tracking-wide transition-colors disabled:opacity-50"
+                        >
+                          <i className="fab fa-google text-[10px]"></i>
+                          <span>Continuer avec Google</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
