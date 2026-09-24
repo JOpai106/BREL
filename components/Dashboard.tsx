@@ -11,6 +11,7 @@ interface Props {
   onPrint: (type: 'quote' | 'invoice' | 'history' | 'sticker', record: MaintenanceRecord) => void;
   onEdit: (record: MaintenanceRecord) => void;
   onDelete: (id: string) => void;
+  onDeleteIntervention?: (recordId: string, interventionId: string) => void;
   onExport?: () => void;
   onBlankQuote?: () => void;
   appUser: AppUser | null;
@@ -18,8 +19,16 @@ interface Props {
   onUpdateConsumables?: (recordId: string, data: { fuelFilterQuantity: number; oilFilterQuantity: number; separatorQuantity: number; oilQuantity: number }) => Promise<void> | void;
 }
 
-const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddIntervention, onExport, onBlankQuote, appUser, onUpdateCurrentIndex, onUpdateConsumables }) => {
+const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onDeleteIntervention, onAddIntervention, onExport, onBlankQuote, appUser, onUpdateCurrentIndex, onUpdateConsumables }) => {
   const [activeLogMachine, setActiveLogMachine] = useState<MaintenanceRecord | null>(null);
+
+  // Synchronise en temps réel la machine active avec les enregistrements (notamment lors de suppressions ou mises à jour)
+  React.useEffect(() => {
+    if (activeLogMachine) {
+      const fresh = records.find(r => r.id === activeLogMachine.id);
+      if (fresh) setActiveLogMachine(fresh);
+    }
+  }, [records]);
   const [notifyMachine, setNotifyMachine] = useState<MaintenanceRecord | null>(null);
   const [notifyMessage, setNotifyMessage] = useState<string>('');
   const [phoneOverride, setPhoneOverride] = useState<string>('');
@@ -721,11 +730,11 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                     {appUser?.role === 'client' && (
                       <button 
                         onClick={() => openEditIndexModal(record)} 
-                        title="Mettre à jour l'index actuel (horamètre)" 
+                        title="Ressaisir l'index actuel ou rectifier une erreur de frappe" 
                         className="px-2.5 py-1 text-[#2185D0] hover:text-white hover:bg-[#2185D0] rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center space-x-1 transition-all"
                       >
                         <i className="fas fa-tachometer-alt text-xs"></i>
-                        <span>Index</span>
+                        <span>Ressaisir Index</span>
                       </button>
                     )}
                     <button 
@@ -809,10 +818,10 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                       type="button"
                       onClick={() => openEditIndexModal(record)}
                       className="mt-2.5 inline-flex items-center justify-center space-x-1.5 py-1.5 px-2.5 bg-white hover:bg-[#2185D0] text-[#2185D0] hover:text-white border border-[#2185D0]/30 hover:border-[#2185D0] rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-xs active:scale-95 w-full"
-                      title="Mettre à jour l'index actuel uniquement"
+                      title="Modifier ou ressaisir l'index en cas d'erreur de saisie (horamètre uniquement)"
                     >
                       <i className="fas fa-pencil-alt text-[9px]"></i>
-                      <span>Modifier l'index</span>
+                      <span>{appUser?.role === 'client' ? "Ressaisir / Modifier l'index" : "Modifier l'index"}</span>
                     </button>
                   </div>
 
@@ -1308,6 +1317,18 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                           ) : (
                             <i className="fas fa-check-circle text-emerald-500 text-sm" title="Opération validée"></i>
                           )}
+
+                          {/* Suppression de l'intervention : strictement réservé au profil Administrateur */}
+                          {appUser?.role === 'admin' && onDeleteIntervention && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteIntervention(activeLogMachine.id, log.id)}
+                              className="w-7 h-7 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-700 flex items-center justify-center transition-all ml-1"
+                              title="Supprimer cette intervention de l'historique (Admin uniquement)"
+                            >
+                              <i className="fas fa-trash-alt text-[10px]"></i>
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))
@@ -1604,9 +1625,9 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                   <i className="fas fa-tachometer-alt text-lg"></i>
                 </div>
                 <div>
-                  <h3 className="font-black text-base md:text-lg uppercase tracking-tight">Relevé d'Index Actuel</h3>
+                  <h3 className="font-black text-base md:text-lg uppercase tracking-tight">Ressaisie & Correction d'Index</h3>
                   <p className="text-slate-400 text-xs font-medium">
-                    Mise à jour de l'horamètre uniquement
+                    Horamètre • Rectification sans altérer d'autres données
                   </p>
                 </div>
               </div>
@@ -1635,15 +1656,25 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                   <span className="text-xs font-black text-slate-800 font-mono">
                     {formatNumber(editingIndexMachine.currentIndex)} h
                   </span>
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Index Précédent</p>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Index Enregistré</p>
                 </div>
               </div>
 
               {/* Champ de saisie index */}
               <div className="space-y-2">
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  Nouvel Index Actuel (Heures de fonctionnement)
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    Nouvel Index Horamètre (Heures)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setTempIndexValue('')}
+                    className="text-[10px] text-[#2185D0] hover:text-[#1a6fb0] font-black uppercase tracking-wider transition-colors flex items-center space-x-1"
+                  >
+                    <i className="fas fa-eraser text-[9px]"></i>
+                    <span>Effacer pour ressaisir</span>
+                  </button>
+                </div>
                 <div className="relative">
                   <input
                     type="number"
@@ -1659,10 +1690,24 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                     heures
                   </span>
                 </div>
-                {Number(tempIndexValue) < (editingIndexMachine.currentIndex || 0) && (
-                  <p className="text-[11px] text-amber-600 font-bold flex items-center pt-1">
-                    <i className="fas fa-exclamation-triangle mr-1.5"></i>
-                    Attention : la valeur saisie ({tempIndexValue} h) est inférieure à l'index actuel enregistré ({editingIndexMachine.currentIndex} h).
+
+                {/* Explications contextuelles selon la valeur saisie */}
+                {tempIndexValue !== '' && Number(tempIndexValue) < (editingIndexMachine.currentIndex || 0) && (
+                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-800 text-xs font-medium space-y-1">
+                    <div className="font-bold flex items-center space-x-1.5 text-amber-900">
+                      <i className="fas fa-wrench text-amber-600"></i>
+                      <span>Correction d'erreur de saisie détectée</span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed">
+                      La nouvelle valeur ({tempIndexValue} h) est inférieure à l'index enregistré ({editingIndexMachine.currentIndex} h). Cette correction est autorisée et mettra à jour l'horamètre sans altérer votre historique ni aucune autre donnée.
+                    </p>
+                  </div>
+                )}
+
+                {tempIndexValue !== '' && Number(tempIndexValue) > (editingIndexMachine.currentIndex || 0) && (
+                  <p className="text-[11px] text-emerald-600 font-bold flex items-center pt-0.5">
+                    <i className="fas fa-check-circle mr-1.5"></i>
+                    Progression de l'horamètre (+{Number(tempIndexValue) - (editingIndexMachine.currentIndex || 0)} heures).
                   </p>
                 )}
               </div>
@@ -1671,7 +1716,7 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
               <div className="p-3.5 bg-blue-50/70 rounded-2xl border border-blue-100 flex items-start space-x-2.5">
                 <i className="fas fa-shield-alt text-[#2185D0] mt-0.5 text-sm shrink-0"></i>
                 <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
-                  <strong>Sécurité des données :</strong> Seul l'index actuel de l'équipement sera actualisé pour recalculer le restant d'heures avant vidange. Aucune autre information n'est altérée.
+                  <strong>Sécurité absolue des données :</strong> Seul le compteur d'heures actuel de l'équipement sera actualisé pour recalculer le restant d'heures avant vidange. Vos historiques d'interventions, consommables et données techniques restent 100% préservés.
                 </p>
               </div>
 
@@ -1703,7 +1748,7 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                 <button
                   type="button"
                   onClick={handleSaveIndexOnly}
-                  disabled={isSavingIndex}
+                  disabled={isSavingIndex || tempIndexValue === ''}
                   className="flex-1 py-3.5 bg-[#2185D0] hover:bg-[#1a6fb0] disabled:opacity-50 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md shadow-[#2185D0]/20 transition-all flex items-center justify-center space-x-2 active:scale-95"
                 >
                   {isSavingIndex ? (
@@ -1714,7 +1759,7 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onAddI
                   ) : (
                     <>
                       <i className="fas fa-check text-xs"></i>
-                      <span>Valider l'Index</span>
+                      <span>Valider la Saisie</span>
                     </>
                   )}
                 </button>

@@ -11,6 +11,7 @@ import UserProfile from './components/UserProfile';
 import ErrorBoundary from './components/ErrorBoundary';
 import Planning from './components/Planning';
 import Map from './components/Map';
+import { ClientManualModal } from './components/ClientManualModal';
 import * as XLSX from 'xlsx';
 import { MaintenanceRecord, TabType, Intervention, ArchivedDocument, StockItem, AppUser, AppNotification } from './types';
 import { getMaintenanceAdvice } from './services/geminiService';
@@ -52,6 +53,7 @@ const App: React.FC = () => {
     recordId?: string 
   } | null>(null);
   
+  const [showClientManual, setShowClientManual] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
@@ -653,6 +655,10 @@ const App: React.FC = () => {
   };
 
   const deleteIntervention = (recordId: string, interventionId: string) => {
+    if (appUser?.role !== 'admin') {
+      console.warn("Seul le profil Administrateur est autorisé à supprimer une intervention de l'historique.");
+      return;
+    }
     setDeleteConfirmData({ 
       type: 'intervention', 
       count: 1, 
@@ -826,9 +832,18 @@ const App: React.FC = () => {
         });
         if (docSearch.trim()) setDocSearch('');
       } else if (type === 'intervention' && recordId) {
+        if (appUser?.role !== 'admin') {
+          console.warn("Seul le profil Administrateur peut supprimer l'historique.");
+          setDeleteConfirmData(null);
+          return;
+        }
         const record = records.find(r => r.id === recordId);
         if (record) {
           const updatedInterventions = record.interventions.filter(i => !ids.includes(i.id));
+          setRecords(prev => prev.map(r => r.id === recordId ? { ...r, interventions: updatedInterventions } : r));
+          if (previewDoc && previewDoc.record.id === recordId) {
+            setPreviewDoc(prev => prev ? { ...prev, record: { ...prev.record, interventions: updatedInterventions } } : null);
+          }
           await updateDoc(doc(db, 'records', recordId), { interventions: updatedInterventions });
         }
       } else if (type === 'machine') {
@@ -1589,6 +1604,17 @@ const App: React.FC = () => {
                          <p className="text-[9px] font-black text-emerald-500 uppercase italic">Opération Validée</p>
                          <p className="text-[8px] text-slate-300 font-medium max-w-[150px] truncate">{int.details || 'Aucune observation'}</p>
                        </div>
+                       {/* Bouton de suppression d'intervention : STRICTEMENT RÉSERVÉ AU PROFIL ADMINISTRATEUR */}
+                       {appUser?.role === 'admin' && (
+                         <button
+                           type="button"
+                           onClick={() => deleteIntervention(record.id, int.id)}
+                           className="w-8 h-8 rounded-xl bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-700 flex items-center justify-center transition-all shadow-2xs print:hidden ml-1"
+                           title="Supprimer cette intervention de l'historique (Admin uniquement)"
+                         >
+                           <i className="fas fa-trash-alt text-xs"></i>
+                         </button>
+                       )}
                     </div>
                   </div>
                 ))}
@@ -2002,6 +2028,18 @@ const App: React.FC = () => {
                 <i className="fab fa-google text-lg"></i>
                 <span>Google</span>
               </button>
+
+              {/* Bouton d'accès direct au manuel d'utilisation client */}
+              <div className="pt-2">
+                <button 
+                  type="button"
+                  onClick={() => setShowClientManual(true)}
+                  className="w-full py-3.5 px-4 bg-blue-50/80 hover:bg-blue-100 text-[#2185D0] rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all flex items-center justify-center space-x-2 border border-blue-200/60 shadow-2xs group cursor-pointer"
+                >
+                  <i className="fas fa-book-open text-xs group-hover:scale-110 transition-transform"></i>
+                  <span>Manuel & Guide de Connexion Client</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2018,6 +2056,7 @@ const App: React.FC = () => {
           onLogout={logout}
           notifications={notifications}
           onMarkAsRead={markNotificationAsRead}
+          onOpenManual={() => setShowClientManual(true)}
         >
           {activeTab === 'dashboard' && (
             <Dashboard 
@@ -2029,6 +2068,7 @@ const App: React.FC = () => {
               onDelete={async (id) => {
                 setDeleteConfirmData({ type: 'machine', count: 1, ids: [id] });
               }}
+              onDeleteIntervention={appUser?.role === 'admin' ? deleteIntervention : undefined}
               onExport={handleExportData}
               onBlankQuote={handleBlankQuote}
               onUpdateCurrentIndex={handleUpdateCurrentIndex}
@@ -2294,6 +2334,13 @@ const App: React.FC = () => {
           )}
         </Layout>
       )}
+
+      {/* Modal Manuel d'Utilisation & Guide de Connexion Client */}
+      <ClientManualModal
+        isOpen={showClientManual}
+        onClose={() => setShowClientManual(false)}
+        userEmail={email || user?.email || undefined}
+      />
     </ErrorBoundary>
   );
 };

@@ -14,9 +14,10 @@ interface LayoutProps {
   onLogout?: () => void;
   notifications?: AppNotification[];
   onMarkAsRead?: (id: string) => void;
+  onOpenManual?: () => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user, appUser, onLogout, notifications = [], onMarkAsRead = () => {} }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user, appUser, onLogout, notifications = [], onMarkAsRead = () => {}, onOpenManual }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isThemeMenuOpen, setIsThemeMenuOpen] = React.useState(false);
   
@@ -158,7 +159,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
           </nav>
 
           {/* Contact & Action Section */}
-          <div className="flex items-center space-x-3 md:space-x-6">
+          <div className="flex items-center space-x-2 md:space-x-4">
+            {onOpenManual && (
+              <button
+                type="button"
+                onClick={onOpenManual}
+                className="h-8 md:h-9 px-2.5 md:px-3 bg-blue-50 hover:bg-[#2185D0] hover:text-white text-[#2185D0] rounded-xl flex items-center space-x-1.5 transition-all text-[11px] font-black uppercase tracking-wider shadow-2xs group"
+                title="Consulter le manuel d'utilisation et guide de connexion Client"
+              >
+                <i className="fas fa-book-open text-xs group-hover:scale-110 transition-transform"></i>
+                <span className="hidden sm:inline">Guide Client</span>
+              </button>
+            )}
             <PWAInstallButton compact />
             {/* Brightness & Visual Theme Selector Dropdown */}
             <div className="relative">
@@ -381,6 +393,21 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
                   <span className="text-[9px] font-black uppercase tracking-widest">{item.label}</span>
                 </button>
               ))}
+              {onOpenManual && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    onOpenManual();
+                  }}
+                  className="flex items-center space-x-3 p-4 rounded-2xl text-[#2185D0] hover:bg-blue-50 transition-all col-span-2 mt-2 border-t border-slate-50"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-[#2185D0]">
+                    <i className="fas fa-book-open text-xs"></i>
+                  </div>
+                  <span className="text-[9px] font-black uppercase tracking-widest">MANUEL / GUIDE CLIENT</span>
+                </button>
+              )}
               {user && (
                 <button
                   onClick={onLogout}
