@@ -12,6 +12,7 @@ interface Props {
   onEdit: (record: MaintenanceRecord) => void;
   onDelete: (id: string) => void;
   onDeleteIntervention?: (recordId: string, interventionId: string) => void;
+  onDeleteAllInterventions?: (recordId: string) => void;
   onExport?: () => void;
   onBlankQuote?: () => void;
   appUser: AppUser | null;
@@ -19,7 +20,7 @@ interface Props {
   onUpdateConsumables?: (recordId: string, data: { fuelFilterQuantity: number; oilFilterQuantity: number; separatorQuantity: number; oilQuantity: number }) => Promise<void> | void;
 }
 
-const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onDeleteIntervention, onAddIntervention, onExport, onBlankQuote, appUser, onUpdateCurrentIndex, onUpdateConsumables }) => {
+const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onDeleteIntervention, onDeleteAllInterventions, onAddIntervention, onExport, onBlankQuote, appUser, onUpdateCurrentIndex, onUpdateConsumables }) => {
   const [activeLogMachine, setActiveLogMachine] = useState<MaintenanceRecord | null>(null);
 
   // Synchronise en temps réel la machine active avec les enregistrements (notamment lors de suppressions ou mises à jour)
@@ -1268,9 +1269,22 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onDele
               <div className="space-y-3">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">HISTORIQUE DES INTERVENTIONS</p>
-                   <span className="text-[9px] font-black bg-slate-100 px-2.5 py-0.5 rounded-full text-slate-600">
-                     {(activeLogMachine.interventions || []).length} ARCHIVES
-                   </span>
+                   <div className="flex items-center space-x-2">
+                     <span className="text-[9px] font-black bg-slate-100 px-2.5 py-0.5 rounded-full text-slate-600">
+                       {(activeLogMachine.interventions || []).length} ARCHIVES
+                     </span>
+                     {appUser?.role === 'admin' && (activeLogMachine.interventions || []).length > 0 && onDeleteAllInterventions && (
+                       <button
+                         type="button"
+                         onClick={() => onDeleteAllInterventions(activeLogMachine.id)}
+                         className="px-2 py-0.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 text-[9px] font-black uppercase tracking-wider flex items-center space-x-1 transition-all"
+                         title="Supprimer tout l'historique de cette machine (Admin uniquement)"
+                       >
+                         <i className="fas fa-trash-alt text-[8px]"></i>
+                         <span>Vider l'historique</span>
+                       </button>
+                     )}
+                   </div>
                 </div>
 
                 <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">

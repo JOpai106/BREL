@@ -25,7 +25,16 @@ import {
 import { onAuthStateChanged, User, updateProfile } from 'firebase/auth';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam && ['dashboard', 'list', 'planning', 'map', 'stock', 'ai-insights', 'documents', 'profile', 'users', 'reports', 'add'].includes(tabParam)) {
+        return tabParam as TabType;
+      }
+    }
+    return 'dashboard';
+  });
   const [user, setUser] = useState<User | null>(null);
   const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -47,11 +56,13 @@ const App: React.FC = () => {
     }
   }, [appUser?.role, activeTab]);
   const [deleteConfirmData, setDeleteConfirmData] = useState<{ 
-    type: 'archive' | 'intervention' | 'machine'; 
+    type: 'archive' | 'intervention' | 'all_interventions' | 'machine'; 
     count: number; 
     ids: string[]; 
-    recordId?: string 
+    recordId?: string;
+    details?: string;
   } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const [showClientManual, setShowClientManual] = useState(false);
   const [email, setEmail] = useState('');
@@ -659,11 +670,35 @@ const App: React.FC = () => {
       console.warn("Seul le profil Administrateur est autorisé à supprimer une intervention de l'historique.");
       return;
     }
+    const targetRecord = records.find(r => r.id === recordId);
+    const targetIntervention = targetRecord?.interventions.find(i => i.id === interventionId);
+    const details = targetIntervention 
+      ? `${targetIntervention.type} (${targetIntervention.index} h) — ${targetRecord?.customerName || 'Équipement'} (${targetRecord?.model || ''})`
+      : undefined;
+
     setDeleteConfirmData({ 
       type: 'intervention', 
       count: 1, 
       ids: [interventionId], 
-      recordId 
+      recordId,
+      details
+    });
+  };
+
+  const deleteAllInterventions = (recordId: string) => {
+    if (appUser?.role !== 'admin') {
+      console.warn("Seul le profil Administrateur est autorisé à supprimer tout l'historique.");
+      return;
+    }
+    const targetRecord = records.find(r => r.id === recordId);
+    if (!targetRecord || !targetRecord.interventions || targetRecord.interventions.length === 0) return;
+
+    setDeleteConfirmData({
+      type: 'all_interventions',
+      count: targetRecord.interventions.length,
+      ids: targetRecord.interventions.map(i => i.id),
+      recordId,
+      details: `Tout l'historique de ${targetRecord.customerName} (${targetRecord.model}) — ${targetRecord.interventions.length} intervention(s)`
     });
   };
 
@@ -817,8 +852,9 @@ const App: React.FC = () => {
   };
 
   const confirmDeletion = async () => {
-    if (!deleteConfirmData || !user) return;
+    if (!deleteConfirmData || !user || isDeleting) return;
     const { type, ids, recordId } = deleteConfirmData;
+    setIsDeleting(true);
 
     try {
       if (type === 'archive') {
@@ -835,6 +871,7 @@ const App: React.FC = () => {
         if (appUser?.role !== 'admin') {
           console.warn("Seul le profil Administrateur peut supprimer l'historique.");
           setDeleteConfirmData(null);
+          setIsDeleting(false);
           return;
         }
         const record = records.find(r => r.id === recordId);
@@ -846,6 +883,18 @@ const App: React.FC = () => {
           }
           await updateDoc(doc(db, 'records', recordId), { interventions: updatedInterventions });
         }
+      } else if (type === 'all_interventions' && recordId) {
+        if (appUser?.role !== 'admin') {
+          console.warn("Seul le profil Administrateur peut supprimer l'historique.");
+          setDeleteConfirmData(null);
+          setIsDeleting(false);
+          return;
+        }
+        setRecords(prev => prev.map(r => r.id === recordId ? { ...r, interventions: [] } : r));
+        if (previewDoc && previewDoc.record.id === recordId) {
+          setPreviewDoc(prev => prev ? { ...prev, record: { ...prev.record, interventions: [] } } : null);
+        }
+        await updateDoc(doc(db, 'records', recordId), { interventions: [] });
       } else if (type === 'machine') {
         const batch = writeBatch(db);
         ids.forEach(id => batch.delete(doc(db, 'records', id)));
@@ -853,9 +902,10 @@ const App: React.FC = () => {
       }
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, type === 'archive' ? 'archives' : 'records');
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirmData(null);
     }
-
-    setDeleteConfirmData(null);
   };
 
   const clearFilteredArchives = () => {
@@ -863,6 +913,81 @@ const App: React.FC = () => {
     if (count === 0) return;
     const filteredIds = filteredDocs.map(d => d.id);
     setDeleteConfirmData({ type: 'archive', count, ids: filteredIds });
+  };
+
+  const renderDeleteConfirmModal = () => {
+    if (!deleteConfirmData) return null;
+    const isHistoryType = deleteConfirmData.type === 'intervention' || deleteConfirmData.type === 'all_interventions';
+
+    return (
+      <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="bg-white rounded-3xl p-6 md:p-8 max-w-sm md:max-w-md w-full shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200 text-center">
+          <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center text-2xl mb-4 mx-auto shadow-inner">
+            <i className={isHistoryType ? "fas fa-history" : "fas fa-exclamation-triangle"}></i>
+          </div>
+
+          <span className="text-[10px] font-black text-red-600 uppercase tracking-widest block mb-1">
+            {isHistoryType ? "Historique • Confirmation requise" : "Confirmation requise"}
+          </span>
+
+          <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">
+            {deleteConfirmData.type === 'intervention' ? "Supprimer l'intervention ?" :
+             deleteConfirmData.type === 'all_interventions' ? "Effacer tout l'historique ?" :
+             deleteConfirmData.type === 'archive' ? "Supprimer les documents ?" :
+             "Supprimer l'équipement ?"}
+          </h3>
+
+          <p className="text-slate-500 text-xs font-medium leading-relaxed mb-4">
+            {deleteConfirmData.type === 'intervention'
+              ? "Vous êtes sur le point de retirer définitivement cette intervention de l'historique certifié de maintenance."
+              : deleteConfirmData.type === 'all_interventions'
+              ? `Vous êtes sur le point d'effacer les ${deleteConfirmData.count} interventions enregistrées pour cette unité.`
+              : `Êtes-vous sûr de vouloir supprimer ${deleteConfirmData.count} ${deleteConfirmData.type === 'archive' ? 'document(s)' : 'unité(s)/client(s)'} ? Cette action est irréversible.`}
+          </p>
+
+          {deleteConfirmData.details && (
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-left mb-5 space-y-1">
+              <div className="flex items-center space-x-1.5 text-slate-400">
+                <i className="fas fa-info-circle text-[10px]"></i>
+                <span className="text-[9px] font-black uppercase tracking-wider">Élément ciblé</span>
+              </div>
+              <p className="text-xs font-bold text-slate-800 break-words">{deleteConfirmData.details}</p>
+            </div>
+          )}
+
+          <div className="flex flex-col space-y-2.5">
+            <button 
+              type="button"
+              onClick={confirmDeletion}
+              disabled={isDeleting}
+              className="w-full py-4 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-red-200 flex items-center justify-center space-x-2 cursor-pointer active:scale-98"
+            >
+              {isDeleting ? (
+                <>
+                  <i className="fas fa-spinner fa-spin text-sm"></i>
+                  <span>Suppression en cours...</span>
+                </>
+              ) : (
+                <>
+                  <i className="fas fa-check-circle text-sm"></i>
+                  <span>
+                    {isHistoryType ? "Valider la suppression de l'historique" : "Valider la suppression"}
+                  </span>
+                </>
+              )}
+            </button>
+            <button 
+              type="button"
+              onClick={() => !isDeleting && setDeleteConfirmData(null)}
+              disabled={isDeleting}
+              className="w-full py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 disabled:opacity-50 rounded-2xl font-black uppercase text-xs tracking-widest transition-all cursor-pointer"
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const archiveDocument = async (type: 'quote' | 'invoice', record: MaintenanceRecord) => {
@@ -1825,6 +1950,9 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Modal de confirmation de suppression d'intervention ou de document */}
+        {renderDeleteConfirmModal()}
       </div>
     );
   }
@@ -2069,6 +2197,7 @@ const App: React.FC = () => {
                 setDeleteConfirmData({ type: 'machine', count: 1, ids: [id] });
               }}
               onDeleteIntervention={appUser?.role === 'admin' ? deleteIntervention : undefined}
+              onDeleteAllInterventions={appUser?.role === 'admin' ? deleteAllInterventions : undefined}
               onExport={handleExportData}
               onBlankQuote={handleBlankQuote}
               onUpdateCurrentIndex={handleUpdateCurrentIndex}
@@ -2120,6 +2249,7 @@ const App: React.FC = () => {
               archivedDocs={archivedDocs} 
               onDeleteDoc={deleteArchivedDoc} 
               onDeleteIntervention={deleteIntervention}
+              appUser={appUser}
             />
           )}
           {activeTab === 'users' && appUser?.role === 'admin' && (
@@ -2301,37 +2431,7 @@ const App: React.FC = () => {
           )}
           
           {/* Custom Delete Confirmation Modal */}
-          {deleteConfirmData && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-              <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
-                <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center text-2xl mb-6 mx-auto">
-                  <i className="fas fa-exclamation-triangle"></i>
-                </div>
-                <h3 className="text-xl font-black text-slate-900 text-center uppercase tracking-tight mb-2">Confirmer la suppression</h3>
-                <p className="text-slate-500 text-center text-sm font-medium mb-8">
-                  Êtes-vous sûr de vouloir supprimer <span className="text-red-600 font-black">{deleteConfirmData.count}</span> {
-                    deleteConfirmData.type === 'archive' ? 'document(s)' : 
-                    deleteConfirmData.type === 'intervention' ? 'intervention(s)' : 
-                    'unité(s)/client(s)'
-                  } ? Cette action est définitive.
-                </p>
-                <div className="flex flex-col space-y-3">
-                  <button 
-                    onClick={confirmDeletion}
-                    className="w-full py-4 bg-red-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-red-700 transition-all shadow-lg shadow-red-200"
-                  >
-                    Oui, Supprimer définitivement
-                  </button>
-                  <button 
-                    onClick={() => setDeleteConfirmData(null)}
-                    className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-slate-200 transition-all"
-                  >
-                    Annuler
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          {renderDeleteConfirmModal()}
         </Layout>
       )}
 

@@ -14,17 +14,23 @@ export default defineConfig(({ mode }) => {
         react(),
         VitePWA({
           registerType: 'autoUpdate',
-          includeAssets: ['icon.svg', 'apple-touch-icon.png', 'pwa-192.png', 'pwa-512.png', 'manifest.json'],
+          includeAssets: ['icon.svg', 'apple-touch-icon.png', 'pwa-192.png', 'pwa-512.png', 'pwa-maskable-512.png', 'manifest.json'],
           manifest: {
             id: '/',
-            name: 'BREL ENERGIE',
-            short_name: 'BREL ENERGIE',
+            name: 'BREL ENERGIE - Suivi Maintenance',
+            short_name: 'Brel Énergie',
             description: 'Application professionnelle de suivi de maintenance des groupes électrogènes pour Brel Energie. Notre expertise, votre solution.',
             theme_color: '#2185D0',
             background_color: '#2185D0',
             display: 'standalone',
+            display_override: ['window-controls-overlay', 'standalone', 'minimal-ui'],
+            orientation: 'any',
             start_url: '/',
             scope: '/',
+            categories: ['business', 'productivity', 'utilities'],
+            lang: 'fr',
+            dir: 'ltr',
+            prefer_related_applications: false,
             icons: [
               {
                 src: '/icon.svg',
@@ -45,10 +51,30 @@ export default defineConfig(({ mode }) => {
                 purpose: 'any'
               },
               {
-                src: '/pwa-512.png',
+                src: '/pwa-maskable-512.png',
                 sizes: '512x512',
                 type: 'image/png',
                 purpose: 'maskable'
+              }
+            ],
+            shortcuts: [
+              {
+                name: 'Parc Équipements',
+                short_name: 'Parc',
+                url: '/?tab=dashboard',
+                description: 'Accéder à la liste des équipements et groupes électrogènes'
+              },
+              {
+                name: 'Planning Interventions',
+                short_name: 'Planning',
+                url: '/?tab=planning',
+                description: 'Consulter les interventions prévues'
+              },
+              {
+                name: 'Carte Géographique',
+                short_name: 'Carte',
+                url: '/?tab=map',
+                description: 'Localiser les équipements sur la carte'
               }
             ]
           },

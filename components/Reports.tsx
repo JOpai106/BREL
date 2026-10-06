@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { MaintenanceRecord, ArchivedDocument, Intervention } from '../types';
+import { MaintenanceRecord, ArchivedDocument, Intervention, AppUser } from '../types';
 import { formatNumber } from '../utils';
 
 interface ReportsProps {
@@ -8,9 +8,10 @@ interface ReportsProps {
   archivedDocs: ArchivedDocument[];
   onDeleteDoc?: (id: string) => void;
   onDeleteIntervention: (recordId: string, interventionId: string) => void;
+  appUser?: AppUser | null;
 }
 
-const Reports: React.FC<ReportsProps> = ({ records, archivedDocs, onDeleteDoc, onDeleteIntervention }) => {
+const Reports: React.FC<ReportsProps> = ({ records, archivedDocs, onDeleteDoc, onDeleteIntervention, appUser }) => {
   const [showInterventions, setShowInterventions] = useState(false);
 
   const totalMachines = records.length;
@@ -89,13 +90,15 @@ const Reports: React.FC<ReportsProps> = ({ records, archivedDocs, onDeleteDoc, o
                     {item.details || '-'}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={() => onDeleteIntervention(item.recordId, item.id)}
-                      className="w-10 h-10 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-all flex items-center justify-center ml-auto shadow-sm"
-                      title="Supprimer l'intervention"
-                    >
-                      <i className="fas fa-trash-alt text-sm"></i>
-                    </button>
+                    {appUser?.role === 'admin' && (
+                      <button 
+                        onClick={() => onDeleteIntervention(item.recordId, item.id)}
+                        className="w-10 h-10 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-all flex items-center justify-center ml-auto shadow-sm"
+                        title="Supprimer cette intervention de l'historique (Admin uniquement)"
+                      >
+                        <i className="fas fa-trash-alt text-sm"></i>
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

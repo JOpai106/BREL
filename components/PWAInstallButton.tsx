@@ -1,120 +1,197 @@
 import React, { useState } from 'react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
-import { Download, Smartphone, X, Share } from 'lucide-react';
+import { Download, Smartphone, X, Share, CheckCircle2, MoreVertical } from 'lucide-react';
 
 export const PWAInstallButton: React.FC<{ className?: string; compact?: boolean }> = ({ className = '', compact = false }) => {
-  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
-  const [showIOSGuide, setShowIOSGuide] = useState(false);
+  const { isInstallable, isInstalled, isIOS, isAndroid, install } = usePWAInstall();
+  const [showGuide, setShowGuide] = useState<'ios' | 'android' | 'other' | null>(null);
 
   // If already running as installed app, don't show
   if (isInstalled) {
     return null;
   }
 
-  // Android / Chrome / Edge / Desktop installation flow
-  if (isInstallable) {
-    if (compact) {
-      return (
+  const handleInstallClick = async () => {
+    if (isInstallable) {
+      const ok = await install();
+      if (!ok && isIOS) {
+        setShowGuide('ios');
+      } else if (!ok && isAndroid) {
+        setShowGuide('android');
+      }
+      return;
+    }
+
+    if (isIOS) {
+      setShowGuide('ios');
+    } else if (isAndroid) {
+      setShowGuide('android');
+    } else {
+      setShowGuide('other');
+    }
+  };
+
+  return (
+    <>
+      {compact ? (
         <button
-          onClick={install}
-          title="Installer l'application Brel Énergie"
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-colors ${className}`}
+          onClick={handleInstallClick}
+          title="Installer l'application Brel Énergie sur votre appareil"
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#2185D0] hover:bg-[#1a6fb0] active:scale-95 text-white text-xs font-bold shadow-xs transition-all ${className}`}
         >
           <Download className="w-3.5 h-3.5" />
           <span>Installer l'app</span>
         </button>
-      );
-    }
-
-    return (
-      <button
-        onClick={install}
-        className={`flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all ${className}`}
-      >
-        <Download className="w-4 h-4" />
-        <span>Installer l'application</span>
-      </button>
-    );
-  }
-
-  // iOS Safari flow
-  if (isIOS) {
-    return (
-      <>
+      ) : (
         <button
-          onClick={() => setShowIOSGuide(true)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition-colors ${className}`}
+          onClick={handleInstallClick}
+          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#2185D0] hover:bg-[#1a6fb0] active:scale-95 text-white text-xs sm:text-sm font-black shadow-md hover:shadow-lg transition-all ${className}`}
         >
-          <Smartphone className="w-3.5 h-3.5 text-blue-600" />
-          <span>Installer sur iPhone</span>
+          {isIOS ? (
+            <Smartphone className="w-4 h-4" />
+          ) : (
+            <Download className="w-4 h-4" />
+          )}
+          <span>{isIOS ? "Installer sur iPhone / iPad" : isAndroid ? "Installer sur Android" : "Installer l'application"}</span>
         </button>
+      )}
 
-        {showIOSGuide && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in duration-200">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-2.5">
-                  <img src="/icon.svg" alt="App Logo" className="w-8 h-8 rounded-lg shadow-sm" />
-                  <h3 className="font-bold text-slate-900 dark:text-white text-base">Installer Brel Énergie</h3>
-                </div>
-                <button
-                  onClick={() => setShowIOSGuide(false)}
-                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300">
-                <p className="font-medium text-slate-800 dark:text-slate-200">
-                  Pour ajouter l'application à votre écran d'accueil iPhone ou iPad :
-                </p>
-                <div className="flex items-start gap-3 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl">
-                  <div className="p-2 bg-blue-50 dark:bg-blue-950/50 text-blue-600 rounded-lg">
-                    <Share className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-900 dark:text-white">Étape 1 :</span>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Appuyez sur l'icône <strong>Partager</strong> en bas de votre navigateur Safari.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl">
-                  <div className="p-2 bg-blue-50 dark:bg-blue-950/50 text-blue-600 rounded-lg">
-                    <Smartphone className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-900 dark:text-white">Étape 2 :</span>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Faites défiler vers le bas et sélectionnez <strong>Sur l'écran d'accueil</strong>.
-                    </p>
-                  </div>
+      {/* Modern Installation Modal Guide for iOS & Android */}
+      {showGuide && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <img src="/pwa-192.png" alt="Brel Énergie" className="w-8 h-8 rounded-lg shadow-xs" />
+                <div>
+                  <h3 className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-wide">
+                    {showGuide === 'ios' ? 'Installation iPhone & iPad' : showGuide === 'android' ? 'Installation Android' : 'Installation Application'}
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-semibold">BREL ÉNERGIE PWA</p>
                 </div>
               </div>
-
               <button
-                onClick={() => setShowIOSGuide(false)}
-                className="mt-5 w-full py-2.5 rounded-xl bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition-colors shadow-sm"
+                onClick={() => setShowGuide(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg transition-colors"
+                title="Fermer"
               >
-                J'ai compris
+                <X className="w-5 h-5" />
               </button>
             </div>
-          </div>
-        )}
-      </>
-    );
-  }
 
-  // Generic fallback if ambient install is available or prompt can be requested
-  return (
-    <button
-      onClick={() => alert("Pour installer l'application sur votre téléphone :\n\n- Sur Chrome/Android : Appuyez sur le menu (⋮) puis 'Installer l'application'.\n- Sur Safari/iOS : Appuyez sur 'Partager' (⎘) puis 'Sur l'écran d'accueil'.")}
-      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 text-xs font-semibold transition-colors ${className}`}
-    >
-      <Download className="w-3.5 h-3.5" />
-      <span>Installer l'app</span>
-    </button>
+            {/* Modal Content depending on OS */}
+            {showGuide === 'ios' && (
+              <div className="mt-4 space-y-3 text-xs text-slate-600 dark:text-slate-300">
+                <p className="font-semibold text-slate-800 dark:text-slate-200">
+                  Installez l'application en quelques secondes sur Safari (iOS 15, 16, 17, 18) :
+                </p>
+
+                <div className="flex items-start gap-3 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                  <div className="p-2 bg-blue-50 dark:bg-blue-950/50 text-[#2185D0] rounded-lg shrink-0">
+                    <Share className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="font-black text-slate-900 dark:text-white">Étape 1 :</span>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                      Dans <strong>Safari</strong>, appuyez sur le bouton <strong>Partager</strong> <span className="inline-block px-1 py-0.5 bg-slate-200 dark:bg-slate-700 rounded text-[10px]">⎘</span> (en bas sur iPhone, en haut sur iPad).
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                  <div className="p-2 bg-blue-50 dark:bg-blue-950/50 text-[#2185D0] rounded-lg shrink-0">
+                    <Smartphone className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="font-black text-slate-900 dark:text-white">Étape 2 :</span>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                      Faites défiler le menu et sélectionnez <strong>Sur l'écran d'accueil</strong>.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                  <div className="p-2 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 rounded-lg shrink-0">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="font-black text-slate-900 dark:text-white">Étape 3 :</span>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                      Appuyez sur <strong>Ajouter</strong> en haut à droite. L'icône apparaîtra sur votre écran d'accueil comme une application native !
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {showGuide === 'android' && (
+              <div className="mt-4 space-y-3 text-xs text-slate-600 dark:text-slate-300">
+                <p className="font-semibold text-slate-800 dark:text-slate-200">
+                  Installez l'application sur votre smartphone Android (Android 12, 13, 14, 15) :
+                </p>
+
+                <div className="flex items-start gap-3 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                  <div className="p-2 bg-blue-50 dark:bg-blue-950/50 text-[#2185D0] rounded-lg shrink-0">
+                    <MoreVertical className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="font-black text-slate-900 dark:text-white">Étape 1 :</span>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                      Dans votre navigateur (Chrome ou Samsung Internet), appuyez sur le menu <span className="inline-block px-1 py-0.5 bg-slate-200 dark:bg-slate-700 rounded text-[10px]">⋮</span> en haut à droite.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                  <div className="p-2 bg-blue-50 dark:bg-blue-950/50 text-[#2185D0] rounded-lg shrink-0">
+                    <Download className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="font-black text-slate-900 dark:text-white">Étape 2 :</span>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                      Sélectionnez <strong>Installer l'application</strong> (ou <em>Ajouter à l'écran d'accueil</em>).
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                  <div className="p-2 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 rounded-lg shrink-0">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="font-black text-slate-900 dark:text-white">Étape 3 :</span>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                      Confirmez en appuyant sur <strong>Installer</strong>. L'application s'ouvrira en plein écran sans barre d'adresse !
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {showGuide === 'other' && (
+              <div className="mt-4 space-y-3 text-xs text-slate-600 dark:text-slate-300">
+                <p className="font-semibold text-slate-800 dark:text-slate-200">
+                  Pour installer l'application sur votre appareil :
+                </p>
+                <ul className="list-disc list-inside space-y-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                  <li><strong>Sur Chrome / Edge (ordinateur) :</strong> Cliquez sur l'icône d'installation dans la barre d'adresse à droite.</li>
+                  <li><strong>Sur mobile (Android) :</strong> Menu ⋮ &gt; Installer l'application.</li>
+                  <li><strong>Sur iPhone / iPad :</strong> Safari &gt; Partager &gt; Sur l'écran d'accueil.</li>
+                </ul>
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowGuide(null)}
+              className="mt-5 w-full py-2.5 rounded-xl bg-[#2185D0] text-white font-black text-xs uppercase tracking-wider hover:bg-[#1a6fb0] transition-colors shadow-sm"
+            >
+              J'ai compris
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
+

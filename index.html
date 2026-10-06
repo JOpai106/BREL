@@ -3,20 +3,25 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#2185D0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#2185D0">
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0B1120">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="BREL ENERGIE">
+    <meta name="apple-mobile-web-app-title" content="Brel Énergie">
+    <meta name="application-name" content="Brel Énergie">
+    <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
     <meta name="description" content="Application professionnelle de suivi de maintenance des groupes électrogènes pour Brel Energie. Notre expertise, votre solution.">
     <meta property="og:title" content="BREL ENERGIE">
     <meta property="og:description" content="Application professionnelle de suivi de maintenance des groupes électrogènes pour Brel Energie. Notre expertise, votre solution.">
     <meta property="og:image" content="/pwa-512.png">
+    <link rel="icon" type="image/svg+xml" href="/icon.svg">
     <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/pwa-512.png">
-    <link rel="icon" type="image/svg+xml" href="/icon.svg">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="mask-icon" href="/icon.svg" color="#2185D0">
     <link rel="manifest" href="/manifest.json">
     <title>BREL ENERGIE - Dashboard Maintenance</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -27,6 +32,17 @@
         
         :root {
           --brand-blue: #2185D0;
+          --sat: env(safe-area-inset-top, 0px);
+          --sab: env(safe-area-inset-bottom, 0px);
+          --sal: env(safe-area-inset-left, 0px);
+          --sar: env(safe-area-inset-right, 0px);
+        }
+
+        html, body {
+          height: 100%;
+          overscroll-behavior-y: contain;
+          -webkit-overflow-scrolling: touch;
+          touch-action: manipulation;
         }
 
         body { 
@@ -37,6 +53,32 @@
         }
 
         .mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Dynamic Viewport & Safe Area Helpers for modern iOS & Android */
+        .min-h-dvh {
+          min-height: 100vh;
+          min-height: 100dvh;
+        }
+
+        .h-dvh {
+          height: 100vh;
+          height: 100dvh;
+        }
+
+        .pt-safe {
+          padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
+        }
+
+        .pb-safe {
+          padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+        }
+
+        /* Prevent auto-zoom on input focus in iOS Safari & Android Chrome */
+        @media screen and (max-width: 767px) {
+          input, select, textarea {
+            font-size: 16px !important;
+          }
+        }
         
         /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }

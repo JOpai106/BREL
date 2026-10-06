@@ -4,6 +4,7 @@ import { TabType, AppUser, AppNotification } from '../types';
 import { User } from 'firebase/auth';
 import NotificationBell from './NotificationBell';
 import { PWAInstallButton } from './PWAInstallButton';
+import { MobileInstallBanner } from './MobileInstallBanner';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -110,7 +111,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
       }}
     >
       {/* Top Header Navigation */}
-      <header className="bg-white border-b border-slate-100 px-4 md:px-8 py-3 sticky top-0 z-50 print:hidden shadow-sm">
+      <header 
+        className="bg-white border-b border-slate-100 px-4 md:px-8 py-3 sticky top-0 z-50 print:hidden shadow-sm"
+        style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}
+      >
         <div className="max-w-[1440px] mx-auto flex items-center justify-between">
           {/* Logo Section */}
           <div className="flex items-center space-x-3 md:space-x-5">
@@ -424,8 +428,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
         )}
       </header>
 
+      {/* Floating Mobile Installation Prompt for modern iOS & Android */}
+      <MobileInstallBanner />
+
       {/* Main Content Area */}
-      <main className="max-w-[1440px] mx-auto p-3 sm:p-5 md:p-6 lg:p-8 pb-28 md:pb-12">
+      <main 
+        className="max-w-[1440px] mx-auto p-3 sm:p-5 md:p-6 lg:p-8 pb-32 md:pb-12"
+        style={{ paddingBottom: 'calc(6.5rem + env(safe-area-inset-bottom, 0px))' }}
+      >
         {children}
       </main>
 
@@ -445,7 +455,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
       </footer>
 
       {/* Mobile Bottom Quick Navigation Bar (< md screens) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-2xl px-2 py-2 flex justify-around items-center print:hidden">
+      <nav 
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-2xl px-2 py-2 flex justify-around items-center print:hidden"
+        style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}
+      >
         {navItems.slice(0, 4).map((item) => (
           <button
             key={item.id}
