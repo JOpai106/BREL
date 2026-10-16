@@ -4,6 +4,7 @@ import { MaintenanceRecord, Intervention, AppUser } from '../types';
 import { calculateMaintenanceStatus, formatNumber } from '../utils';
 import { db } from '../firebase';
 import { doc, updateDoc } from 'firebase/firestore';
+import { MachineHourTrackerModal } from './MachineHourTrackerModal';
 
 interface Props {
   records: MaintenanceRecord[];
@@ -18,16 +19,38 @@ interface Props {
   appUser: AppUser | null;
   onUpdateCurrentIndex?: (recordId: string, newIndex: number) => Promise<void> | void;
   onUpdateConsumables?: (recordId: string, data: { fuelFilterQuantity: number; oilFilterQuantity: number; separatorQuantity: number; oilQuantity: number }) => Promise<void> | void;
+  onSaveIndexReading?: (recordId: string, reading: { date: string; index: number; notes?: string }) => Promise<void> | void;
+  onDeleteIndexReading?: (recordId: string, readingId: string) => Promise<void> | void;
 }
 
-const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onDeleteIntervention, onDeleteAllInterventions, onAddIntervention, onExport, onBlankQuote, appUser, onUpdateCurrentIndex, onUpdateConsumables }) => {
+const Dashboard: React.FC<Props> = ({ 
+  records, 
+  onPrint, 
+  onEdit, 
+  onDelete, 
+  onDeleteIntervention, 
+  onDeleteAllInterventions, 
+  onAddIntervention, 
+  onExport, 
+  onBlankQuote, 
+  appUser, 
+  onUpdateCurrentIndex, 
+  onUpdateConsumables,
+  onSaveIndexReading,
+  onDeleteIndexReading
+}) => {
   const [activeLogMachine, setActiveLogMachine] = useState<MaintenanceRecord | null>(null);
+  const [activeHourTrackerMachine, setActiveHourTrackerMachine] = useState<MaintenanceRecord | null>(null);
 
   // Synchronise en temps réel la machine active avec les enregistrements (notamment lors de suppressions ou mises à jour)
   React.useEffect(() => {
     if (activeLogMachine) {
       const fresh = records.find(r => r.id === activeLogMachine.id);
       if (fresh) setActiveLogMachine(fresh);
+    }
+    if (activeHourTrackerMachine) {
+      const fresh = records.find(r => r.id === activeHourTrackerMachine.id);
+      if (fresh) setActiveHourTrackerMachine(fresh);
     }
   }, [records]);
   const [notifyMachine, setNotifyMachine] = useState<MaintenanceRecord | null>(null);
@@ -728,16 +751,18 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onDele
                         </button>
                       </>
                     )}
-                    {appUser?.role === 'client' && (
-                      <button 
-                        onClick={() => openEditIndexModal(record)} 
-                        title="Ressaisir l'index actuel ou rectifier une erreur de frappe" 
-                        className="px-2.5 py-1 text-[#2185D0] hover:text-white hover:bg-[#2185D0] rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center space-x-1 transition-all"
-                      >
-                        <i className="fas fa-tachometer-alt text-xs"></i>
-                        <span>Ressaisir Index</span>
-                      </button>
-                    )}
+                    <button 
+                      onClick={() => setActiveHourTrackerMachine(record)} 
+                      title="Module d'enregistrement des relevés d'heures et historique des index" 
+                      className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-[#2185D0] hover:bg-[#2185D0]/10 transition-all relative"
+                    >
+                      <i className="fas fa-tachometer-alt text-xs"></i>
+                      {Array.isArray(record.indexHistory) && record.indexHistory.length > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-0.5 bg-[#2185D0] text-white rounded-full text-[8px] font-black font-mono flex items-center justify-center shadow-xs">
+                          {record.indexHistory.length}
+                        </span>
+                      )}
+                    </button>
                     <button 
                       onClick={() => onPrint('history', record)} 
                       title="Voir Historique" 
@@ -817,12 +842,17 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onDele
 
                     <button
                       type="button"
-                      onClick={() => openEditIndexModal(record)}
-                      className="mt-2.5 inline-flex items-center justify-center space-x-1.5 py-1.5 px-2.5 bg-white hover:bg-[#2185D0] text-[#2185D0] hover:text-white border border-[#2185D0]/30 hover:border-[#2185D0] rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-xs active:scale-95 w-full"
-                      title="Modifier ou ressaisir l'index en cas d'erreur de saisie (horamètre uniquement)"
+                      onClick={() => setActiveHourTrackerMachine(record)}
+                      className="mt-2.5 inline-flex items-center justify-center space-x-1.5 py-2 px-2.5 bg-[#2185D0]/10 hover:bg-[#2185D0] text-[#2185D0] hover:text-white border border-[#2185D0]/25 hover:border-[#2185D0] rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-xs active:scale-95 w-full group/idxbtn"
+                      title="Ouvrir le module d'enregistrement d'heures avec date et historique des index"
                     >
-                      <i className="fas fa-pencil-alt text-[9px]"></i>
-                      <span>{appUser?.role === 'client' ? "Ressaisir / Modifier l'index" : "Modifier l'index"}</span>
+                      <i className="fas fa-clock text-[9px]"></i>
+                      <span>Relevés & Historique</span>
+                      {Array.isArray(record.indexHistory) && record.indexHistory.length > 0 && (
+                        <span className="ml-1 px-1.5 py-0.5 bg-[#2185D0] text-white group-hover/idxbtn:bg-white group-hover/idxbtn:text-[#2185D0] rounded-full text-[9px] font-mono font-black transition-colors">
+                          {record.indexHistory.length}
+                        </span>
+                      )}
                     </button>
                   </div>
 
@@ -1097,12 +1127,28 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onDele
                   {activeLogMachine.model} — ID: {(activeLogMachine.id || '').slice(0, 6)}
                 </p>
               </div>
-              <button 
-                onClick={() => setActiveLogMachine(null)} 
-                className="w-10 h-10 rounded-2xl hover:bg-slate-200/80 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-all border border-slate-200/60"
-              >
-                <i className="fas fa-times"></i>
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveHourTrackerMachine(activeLogMachine)}
+                  className="inline-flex items-center space-x-1.5 px-3 py-2 bg-white border border-slate-200 hover:border-[#2185D0] text-slate-700 hover:text-[#2185D0] rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors shadow-xs"
+                  title="Module Relevés d'heures & Historique des index"
+                >
+                  <i className="fas fa-clock text-[#2185D0]"></i>
+                  <span className="hidden sm:inline">Relevés d'Index</span>
+                  {Array.isArray(activeLogMachine.indexHistory) && activeLogMachine.indexHistory.length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.2 bg-[#2185D0] text-white rounded-full text-[8px] font-mono font-bold">
+                      {activeLogMachine.indexHistory.length}
+                    </span>
+                  )}
+                </button>
+                <button 
+                  onClick={() => setActiveLogMachine(null)} 
+                  className="w-10 h-10 rounded-2xl hover:bg-slate-200/80 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-all border border-slate-200/60"
+                >
+                  <i className="fas fa-times"></i>
+                </button>
+              </div>
             </div>
             
             {/* Modal Scrollable Body */}
@@ -1990,6 +2036,23 @@ const Dashboard: React.FC<Props> = ({ records, onPrint, onEdit, onDelete, onDele
             </div>
           </div>
         </div>
+      )}
+
+      {/* Module Dédié Enregistrement Relevé d'Heures & Historique des Index */}
+      {activeHourTrackerMachine && (
+        <MachineHourTrackerModal
+          record={activeHourTrackerMachine}
+          onClose={() => setActiveHourTrackerMachine(null)}
+          appUser={appUser}
+          onSaveReading={async (recId, reading) => {
+            if (onSaveIndexReading) {
+              await onSaveIndexReading(recId, reading);
+            } else if (onUpdateCurrentIndex) {
+              await onUpdateCurrentIndex(recId, reading.index);
+            }
+          }}
+          onDeleteReading={onDeleteIndexReading}
+        />
       )}
 
     </div>

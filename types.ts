@@ -10,6 +10,18 @@ export interface Intervention {
   technicianUid?: string; // Track who did the intervention
 }
 
+export interface IndexReading {
+  id: string;
+  date: string;
+  index: number;
+  recordedBy?: string;
+  recordedByUid?: string;
+  notes?: string;
+  differenceHours?: number;
+  daysElapsed?: number;
+  dailyAverage?: number;
+}
+
 export interface MaintenanceRecord {
   id: string;
   customerName: string;
@@ -34,6 +46,8 @@ export interface MaintenanceRecord {
   dailyHours: number;
   lastUpdateDate: string;
   interventions: Intervention[];
+  indexHistory?: IndexReading[];
+
   // Pricing details for documents
   oilQuantity: number;
   oilPrice: number;

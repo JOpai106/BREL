@@ -13,7 +13,7 @@ import Planning from './components/Planning';
 import Map from './components/Map';
 import { ClientManualModal } from './components/ClientManualModal';
 import * as XLSX from 'xlsx';
-import { MaintenanceRecord, TabType, Intervention, ArchivedDocument, StockItem, AppUser, AppNotification } from './types';
+import { MaintenanceRecord, TabType, Intervention, ArchivedDocument, StockItem, AppUser, AppNotification, IndexReading } from './types';
 import { getMaintenanceAdvice } from './services/geminiService';
 import { formatNumber, exportToCSV, calculateMaintenanceStatus } from './utils';
 import { 
@@ -756,32 +756,132 @@ const App: React.FC = () => {
     setActiveTab('add');
   };
 
-  const handleUpdateCurrentIndex = async (recordId: string, newIndex: number) => {
+  const handleSaveIndexReading = async (
+    recordId: string, 
+    readingData: { date: string; index: number; notes?: string }
+  ) => {
     const target = records.find(r => r.id === recordId);
     if (!target) return;
-    const cleanIndex = Math.max(0, Math.round(newIndex));
-    const now = new Date().toISOString();
+
+    const cleanIndex = Math.max(0, Math.round(readingData.index));
+    const readingDate = readingData.date ? new Date(readingData.date).toISOString() : new Date().toISOString();
+    
+    // Existing history or seed with baseline if empty
+    let history: IndexReading[] = Array.isArray(target.indexHistory) ? [...target.indexHistory] : [];
+    
+    if (history.length === 0 && target.lastUpdateDate && target.currentIndex !== undefined) {
+      history.push({
+        id: 'idx-init-' + target.id.slice(0, 8),
+        date: target.lastUpdateDate,
+        index: target.currentIndex,
+        recordedBy: 'Initialisation système',
+        notes: "Index initial enregistré"
+      });
+    }
+
+    // Sort existing history to find previous reading
+    const sortedPast = [...history]
+      .filter(h => new Date(h.date) <= new Date(readingDate))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const prevReading = sortedPast[0];
+
+    let diffHours: number | undefined = undefined;
+    let daysDiff: number | undefined = undefined;
+    let dailyAvg: number | undefined = undefined;
+
+    if (prevReading) {
+      diffHours = cleanIndex - prevReading.index;
+      const msDiff = Math.abs(new Date(readingDate).getTime() - new Date(prevReading.date).getTime());
+      daysDiff = Math.max(0.1, msDiff / (1000 * 60 * 60 * 24));
+      if (diffHours > 0 && daysDiff > 0) {
+        dailyAvg = parseFloat((diffHours / daysDiff).toFixed(1));
+      }
+    }
+
+    const newReading: IndexReading = {
+      id: 'idx-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+      date: readingDate,
+      index: cleanIndex,
+      recordedBy: appUser?.displayName || appUser?.email || (appUser?.role === 'client' ? 'Client' : 'Technicien'),
+      recordedByUid: appUser?.uid,
+      notes: readingData.notes?.trim() || undefined,
+      differenceHours: diffHours,
+      daysElapsed: daysDiff ? Math.round(daysDiff * 10) / 10 : undefined,
+      dailyAverage: dailyAvg
+    };
+
+    const newHistory = [newReading, ...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // Update currentIndex to the reading with the latest chronological date
+    const latestReading = newHistory[0];
+    const newCurrentIndex = latestReading ? latestReading.index : cleanIndex;
+    const newLastUpdateDate = latestReading ? latestReading.date : readingDate;
 
     const updatedRecord: MaintenanceRecord = {
       ...target,
-      currentIndex: cleanIndex,
-      lastUpdateDate: now
+      currentIndex: newCurrentIndex,
+      lastUpdateDate: newLastUpdateDate,
+      indexHistory: newHistory
     };
 
     // Optimistic UI update
     setRecords(prev => prev.map(r => r.id === recordId ? updatedRecord : r));
 
     try {
-      // Met à jour EXCLUSIVEMENT currentIndex et lastUpdateDate, sans toucher aux autres champs
+      // Met à jour EXCLUSIVEMENT currentIndex, lastUpdateDate et indexHistory, sans altérer aucune autre donnée
       await updateDoc(doc(db, 'records', recordId), {
-        currentIndex: cleanIndex,
-        lastUpdateDate: now
+        currentIndex: newCurrentIndex,
+        lastUpdateDate: newLastUpdateDate,
+        indexHistory: newHistory
       });
       await checkMaintenanceApproaching(updatedRecord);
     } catch (err) {
-      console.error("Erreur mise à jour index:", err);
+      console.error("Erreur enregistrement relevé index:", err);
       handleFirestoreError(err, OperationType.WRITE, 'records');
     }
+  };
+
+  const handleDeleteIndexReading = async (recordId: string, readingId: string) => {
+    const target = records.find(r => r.id === recordId);
+    if (!target || !target.indexHistory) return;
+
+    const newHistory = target.indexHistory.filter(h => h.id !== readingId);
+    
+    // Recalcule le currentIndex à partir du relevé le plus récent restant
+    const sorted = [...newHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const latest = sorted[0];
+    const newCurrentIndex = latest ? latest.index : target.currentIndex;
+    const newLastUpdateDate = latest ? latest.date : target.lastUpdateDate;
+
+    const updatedRecord: MaintenanceRecord = {
+      ...target,
+      currentIndex: newCurrentIndex,
+      lastUpdateDate: newLastUpdateDate,
+      indexHistory: newHistory
+    };
+
+    setRecords(prev => prev.map(r => r.id === recordId ? updatedRecord : r));
+
+    try {
+      // Met à jour exclusivement les relevés sans toucher aux autres données
+      await updateDoc(doc(db, 'records', recordId), {
+        currentIndex: newCurrentIndex,
+        lastUpdateDate: newLastUpdateDate,
+        indexHistory: newHistory
+      });
+      await checkMaintenanceApproaching(updatedRecord);
+    } catch (err) {
+      console.error("Erreur suppression relevé index:", err);
+      handleFirestoreError(err, OperationType.WRITE, 'records');
+    }
+  };
+
+  const handleUpdateCurrentIndex = async (recordId: string, newIndex: number) => {
+    await handleSaveIndexReading(recordId, {
+      date: new Date().toISOString(),
+      index: newIndex,
+      notes: "Mise à jour rapide de l'horamètre"
+    });
   };
 
   const handleUpdateConsumablesQuantities = async (
@@ -2201,6 +2301,8 @@ const App: React.FC = () => {
               onExport={handleExportData}
               onBlankQuote={handleBlankQuote}
               onUpdateCurrentIndex={handleUpdateCurrentIndex}
+              onSaveIndexReading={handleSaveIndexReading}
+              onDeleteIndexReading={handleDeleteIndexReading}
               onUpdateConsumables={handleUpdateConsumablesQuantities}
             />
           )}
@@ -2219,6 +2321,8 @@ const App: React.FC = () => {
               onEdit={handleEdit} 
               appUser={appUser}
               onUpdateCurrentIndex={handleUpdateCurrentIndex}
+              onSaveIndexReading={handleSaveIndexReading}
+              onDeleteIndexReading={handleDeleteIndexReading}
               onUpdateConsumables={handleUpdateConsumablesQuantities}
             />
           )}

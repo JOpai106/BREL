@@ -1,7 +1,8 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { MaintenanceRecord, AppUser } from '../types';
 import { calculateMaintenanceStatus, formatNumber } from '../utils';
+import { MachineHourTrackerModal } from './MachineHourTrackerModal';
 
 interface Props {
   records: MaintenanceRecord[];
@@ -10,10 +11,31 @@ interface Props {
   appUser: AppUser | null;
   onUpdateCurrentIndex?: (recordId: string, newIndex: number) => Promise<void> | void;
   onUpdateConsumables?: (recordId: string, data: { fuelFilterQuantity: number; oilFilterQuantity: number; separatorQuantity: number; oilQuantity: number }) => Promise<void> | void;
+  onSaveIndexReading?: (recordId: string, reading: { date: string; index: number; notes?: string }) => Promise<void> | void;
+  onDeleteIndexReading?: (recordId: string, readingId: string) => Promise<void> | void;
 }
 
-const MaintenanceList: React.FC<Props> = ({ records, onDelete, onEdit, appUser, onUpdateCurrentIndex, onUpdateConsumables }) => {
+const MaintenanceList: React.FC<Props> = ({ 
+  records, 
+  onDelete, 
+  onEdit, 
+  appUser, 
+  onUpdateCurrentIndex, 
+  onUpdateConsumables,
+  onSaveIndexReading,
+  onDeleteIndexReading
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeHourTrackerMachine, setActiveHourTrackerMachine] = useState<MaintenanceRecord | null>(null);
+
+  // Sync activeHourTrackerMachine with fresh records
+  useEffect(() => {
+    if (activeHourTrackerMachine) {
+      const fresh = records.find(r => r.id === activeHourTrackerMachine.id);
+      if (fresh) setActiveHourTrackerMachine(fresh);
+    }
+  }, [records]);
+
   const [editingIndexMachine, setEditingIndexMachine] = useState<MaintenanceRecord | null>(null);
   const [tempIndexValue, setTempIndexValue] = useState<string>('');
   const [isSavingIndex, setIsSavingIndex] = useState(false);
@@ -183,16 +205,19 @@ const MaintenanceList: React.FC<Props> = ({ records, onDelete, onEdit, appUser, 
                         <span className="mono text-[10px] md:text-xs font-black text-slate-700">
                           {formatNumber(record.currentIndex)} H
                         </span>
-                        {appUser?.role === 'client' && (
-                          <button
-                            type="button"
-                            onClick={() => openEditIndexModal(record)}
-                            className="text-[#2185D0] hover:text-[#1a6fb0] p-1 rounded-md hover:bg-[#2185D0]/10 transition-colors"
-                            title="Mettre à jour l'index"
-                          >
-                            <i className="fas fa-pencil-alt text-[10px]"></i>
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => setActiveHourTrackerMachine(record)}
+                          className="text-[#2185D0] hover:text-[#1a6fb0] p-1.5 rounded-lg hover:bg-[#2185D0]/10 transition-colors relative"
+                          title="Module Relevés d'heures & Historique des index"
+                        >
+                          <i className="fas fa-clock text-[11px]"></i>
+                          {Array.isArray(record.indexHistory) && record.indexHistory.length > 0 && (
+                            <span className="absolute -top-1 -right-1 min-w-[13px] h-[13px] px-0.5 bg-[#2185D0] text-white rounded-full text-[8px] font-black font-mono flex items-center justify-center">
+                              {record.indexHistory.length}
+                            </span>
+                          )}
+                        </button>
                       </div>
                       <div className="w-16 md:w-24 bg-slate-100 rounded-full h-1 md:h-1.5 mt-1.5 md:mt-2 overflow-hidden border border-slate-200">
                         <div className="h-full bg-[#2185D0]" style={{ width: `${status.progressPercent}%` }}></div>
@@ -209,6 +234,18 @@ const MaintenanceList: React.FC<Props> = ({ records, onDelete, onEdit, appUser, 
                     <td className="px-5 md:px-8 py-4 md:py-6 text-right">
                       {(appUser?.role === 'admin' || appUser?.role === 'technician') && (
                         <div className="flex items-center justify-end space-x-2 md:space-x-3 opacity-60 md:opacity-30 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => setActiveHourTrackerMachine(record)} 
+                            title="Module Relevés d'heures & Historique des index" 
+                            className="p-2 md:p-3 bg-slate-50 text-slate-400 hover:text-[#2185D0] hover:bg-white rounded-lg md:rounded-xl transition-all border border-slate-100 shadow-sm relative"
+                          >
+                            <i className="fas fa-tachometer-alt text-xs md:text-sm"></i>
+                            {Array.isArray(record.indexHistory) && record.indexHistory.length > 0 && (
+                              <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-0.5 bg-[#2185D0] text-white rounded-full text-[8px] font-black font-mono flex items-center justify-center">
+                                {record.indexHistory.length}
+                              </span>
+                            )}
+                          </button>
                           <button onClick={() => openEditConsumablesModal(record)} title="Modifier quantités consommables" className="p-2 md:p-3 bg-slate-50 text-slate-400 hover:text-emerald-600 hover:bg-white rounded-lg md:rounded-xl transition-all border border-slate-100 shadow-sm">
                             <i className="fas fa-sliders-h text-xs md:text-sm"></i>
                           </button>
@@ -224,12 +261,12 @@ const MaintenanceList: React.FC<Props> = ({ records, onDelete, onEdit, appUser, 
                         <div className="flex items-center justify-end">
                           <button
                             type="button"
-                            onClick={() => openEditIndexModal(record)}
+                            onClick={() => setActiveHourTrackerMachine(record)}
                             className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-[#2185D0] text-white hover:bg-[#1a6fb0] rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-xs active:scale-95"
-                            title="Mettre à jour l'index actuel uniquement"
+                            title="Enregistrer un relevé d'heures avec date et consulter l'historique des index"
                           >
                             <i className="fas fa-tachometer-alt text-[10px]"></i>
-                            <span>Relever Index</span>
+                            <span>Relevés & Historique</span>
                           </button>
                         </div>
                       )}
@@ -592,6 +629,24 @@ const MaintenanceList: React.FC<Props> = ({ records, onDelete, onEdit, appUser, 
           </div>
         </div>
       )}
+
+      {/* Module Dédié Enregistrement Relevé d'Heures & Historique des Index */}
+      {activeHourTrackerMachine && (
+        <MachineHourTrackerModal
+          record={activeHourTrackerMachine}
+          onClose={() => setActiveHourTrackerMachine(null)}
+          appUser={appUser}
+          onSaveReading={async (recId, reading) => {
+            if (onSaveIndexReading) {
+              await onSaveIndexReading(recId, reading);
+            } else if (onUpdateCurrentIndex) {
+              await onUpdateCurrentIndex(recId, reading.index);
+            }
+          }}
+          onDeleteReading={onDeleteIndexReading}
+        />
+      )}
+
     </div>
   );
 };

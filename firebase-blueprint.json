@@ -29,6 +29,10 @@
           "type": "array",
           "items": { "$ref": "Intervention" }
         },
+        "indexHistory": {
+          "type": "array",
+          "items": { "$ref": "IndexReading" }
+        },
         "oilQuantity": { "type": "number" },
         "oilPrice": { "type": "number" },
         "oilFilterPrice": { "type": "number" },
@@ -46,6 +50,23 @@
         "createdBy": { "type": "string", "description": "UID of the user who created this record" }
       },
       "required": ["id", "customerName", "model", "currentIndex", "lastUpdateDate"]
+    },
+    "IndexReading": {
+      "title": "IndexReading",
+      "description": "Historical hour-meter reading for a machine",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "index": { "type": "number" },
+        "recordedBy": { "type": "string" },
+        "recordedByUid": { "type": "string" },
+        "notes": { "type": "string" },
+        "differenceHours": { "type": "number" },
+        "daysElapsed": { "type": "number" },
+        "dailyAverage": { "type": "number" }
+      },
+      "required": ["id", "date", "index"]
     },
     "Intervention": {
       "title": "Intervention",
