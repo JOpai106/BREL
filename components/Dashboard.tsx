@@ -21,6 +21,8 @@ interface Props {
   onUpdateConsumables?: (recordId: string, data: { fuelFilterQuantity: number; oilFilterQuantity: number; separatorQuantity: number; oilQuantity: number }) => Promise<void> | void;
   onSaveIndexReading?: (recordId: string, reading: { date: string; index: number; notes?: string }) => Promise<void> | void;
   onDeleteIndexReading?: (recordId: string, readingId: string) => Promise<void> | void;
+  onClearIndexHistory?: (recordId: string) => Promise<void> | void;
+  onUpdateIndexReading?: (recordId: string, readingId: string, reading: { date: string; index: number; notes?: string }) => Promise<void> | void;
 }
 
 const Dashboard: React.FC<Props> = ({ 
@@ -37,7 +39,9 @@ const Dashboard: React.FC<Props> = ({
   onUpdateCurrentIndex, 
   onUpdateConsumables,
   onSaveIndexReading,
-  onDeleteIndexReading
+  onDeleteIndexReading,
+  onClearIndexHistory,
+  onUpdateIndexReading
 }) => {
   const [activeLogMachine, setActiveLogMachine] = useState<MaintenanceRecord | null>(null);
   const [activeHourTrackerMachine, setActiveHourTrackerMachine] = useState<MaintenanceRecord | null>(null);
@@ -2052,6 +2056,8 @@ const Dashboard: React.FC<Props> = ({
             }
           }}
           onDeleteReading={onDeleteIndexReading}
+          onClearHistory={onClearIndexHistory}
+          onUpdateReading={onUpdateIndexReading}
         />
       )}
 

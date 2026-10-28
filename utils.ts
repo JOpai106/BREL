@@ -106,3 +106,38 @@ export const exportToCSV = (data: any[], filename: string) => {
     document.body.removeChild(link);
   }
 };
+
+/**
+ * Nettoie récursivement tous les objets et tableaux pour Firestore
+ * en supprimant toute propriété `undefined` et en convertissant `NaN` en 0.
+ * Empêche formellement l'erreur : "Function updateDoc() called with invalid data. Unsupported field value: undefined"
+ */
+export function sanitizeForFirestore<T = any>(val: T): T {
+  if (val === undefined) {
+    return undefined as any;
+  }
+  if (val === null || typeof val !== 'object') {
+    if (typeof val === 'number') {
+      return (Number.isNaN(val) ? 0 : val) as any;
+    }
+    return val;
+  }
+  if (val instanceof Date) {
+    return val.toISOString() as any;
+  }
+  if (Array.isArray(val)) {
+    return val
+      .map(item => sanitizeForFirestore(item))
+      .filter(item => item !== undefined) as any;
+  }
+  const result: Record<string, any> = {};
+  for (const [key, v] of Object.entries(val as Record<string, any>)) {
+    if (v !== undefined) {
+      const sanitized = sanitizeForFirestore(v);
+      if (sanitized !== undefined) {
+        result[key] = sanitized;
+      }
+    }
+  }
+  return result as T;
+}

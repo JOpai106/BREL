@@ -15,7 +15,7 @@ import { ClientManualModal } from './components/ClientManualModal';
 import * as XLSX from 'xlsx';
 import { MaintenanceRecord, TabType, Intervention, ArchivedDocument, StockItem, AppUser, AppNotification, IndexReading } from './types';
 import { getMaintenanceAdvice } from './services/geminiService';
-import { formatNumber, exportToCSV, calculateMaintenanceStatus } from './utils';
+import { formatNumber, exportToCSV, calculateMaintenanceStatus, sanitizeForFirestore } from './utils';
 import { 
   auth, db, loginWithGoogle, logout, handleFirestoreError, OperationType, loginWithEmail, registerWithEmail, resetUserPassword 
 } from './firebase';
@@ -703,13 +703,7 @@ const App: React.FC = () => {
   };
 
   const sanitizeRecord = (data: Record<string, any>) => {
-    const clean: Record<string, any> = {};
-    Object.keys(data).forEach((key) => {
-      if (data[key] !== undefined && !Number.isNaN(data[key])) {
-        clean[key] = data[key];
-      }
-    });
-    return clean;
+    return sanitizeForFirestore(data);
   };
 
   const handleSave = async (recordData: Omit<MaintenanceRecord, 'id' | 'lastUpdateDate' | 'interventions'>) => {
@@ -720,7 +714,7 @@ const App: React.FC = () => {
           ...recordData, 
           lastUpdateDate: new Date().toISOString() 
         };
-        const cleanRecord = sanitizeRecord(updatedRecord) as MaintenanceRecord;
+        const cleanRecord = sanitizeForFirestore(updatedRecord) as MaintenanceRecord;
         
         // Optimistic local update
         setRecords(prev => prev.map(r => r.id === editingRecord.id ? cleanRecord : r));
@@ -737,7 +731,7 @@ const App: React.FC = () => {
           interventions: [],
           createdBy: user?.uid || appUser?.uid || 'admin'
         } as any;
-        const cleanRecord = sanitizeRecord(newRecord) as MaintenanceRecord;
+        const cleanRecord = sanitizeForFirestore(newRecord) as MaintenanceRecord;
         
         // Optimistic local update
         setRecords(prev => [cleanRecord, ...prev]);
@@ -767,7 +761,9 @@ const App: React.FC = () => {
     const readingDate = readingData.date ? new Date(readingData.date).toISOString() : new Date().toISOString();
     
     // Existing history or seed with baseline if empty
-    let history: IndexReading[] = Array.isArray(target.indexHistory) ? [...target.indexHistory] : [];
+    let history: IndexReading[] = Array.isArray(target.indexHistory)
+      ? target.indexHistory.map(item => sanitizeForFirestore(item))
+      : [];
     
     if (history.length === 0 && target.lastUpdateDate && target.currentIndex !== undefined) {
       history.push({
@@ -798,19 +794,36 @@ const App: React.FC = () => {
       }
     }
 
+    // Build new reading object omitting any undefined fields
     const newReading: IndexReading = {
-      id: 'idx-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+      id: 'idx-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8),
       date: readingDate,
       index: cleanIndex,
-      recordedBy: appUser?.displayName || appUser?.email || (appUser?.role === 'client' ? 'Client' : 'Technicien'),
-      recordedByUid: appUser?.uid,
-      notes: readingData.notes?.trim() || undefined,
-      differenceHours: diffHours,
-      daysElapsed: daysDiff ? Math.round(daysDiff * 10) / 10 : undefined,
-      dailyAverage: dailyAvg
+      recordedBy: appUser?.displayName || appUser?.email || (appUser?.role === 'client' ? 'Client' : 'Technicien')
     };
 
-    const newHistory = [newReading, ...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    if (appUser?.uid) {
+      newReading.recordedByUid = appUser.uid;
+    }
+    if (readingData.notes && readingData.notes.trim()) {
+      newReading.notes = readingData.notes.trim();
+    }
+    if (diffHours !== undefined && !Number.isNaN(diffHours)) {
+      newReading.differenceHours = diffHours;
+    }
+    if (daysDiff !== undefined && !Number.isNaN(daysDiff)) {
+      newReading.daysElapsed = Math.round(daysDiff * 10) / 10;
+    }
+    if (dailyAvg !== undefined && !Number.isNaN(dailyAvg)) {
+      newReading.dailyAverage = dailyAvg;
+    }
+
+    const sanitizedNewReading = sanitizeForFirestore(newReading);
+
+    // Merge and sort newest first
+    const newHistory = [sanitizedNewReading, ...history]
+      .map(item => sanitizeForFirestore(item))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     // Update currentIndex to the reading with the latest chronological date
     const latestReading = newHistory[0];
@@ -829,11 +842,14 @@ const App: React.FC = () => {
 
     try {
       // Met à jour EXCLUSIVEMENT currentIndex, lastUpdateDate et indexHistory, sans altérer aucune autre donnée
-      await updateDoc(doc(db, 'records', recordId), {
+      // en s'assurant qu'aucun champ undefined n'est transmis à Firestore
+      const updatePayload = sanitizeForFirestore({
         currentIndex: newCurrentIndex,
         lastUpdateDate: newLastUpdateDate,
         indexHistory: newHistory
       });
+
+      await updateDoc(doc(db, 'records', recordId), updatePayload);
       await checkMaintenanceApproaching(updatedRecord);
     } catch (err) {
       console.error("Erreur enregistrement relevé index:", err);
@@ -843,15 +859,48 @@ const App: React.FC = () => {
 
   const handleDeleteIndexReading = async (recordId: string, readingId: string) => {
     const target = records.find(r => r.id === recordId);
-    if (!target || !target.indexHistory) return;
+    if (!target) return;
 
-    const newHistory = target.indexHistory.filter(h => h.id !== readingId);
+    const currentHistory = Array.isArray(target.indexHistory) ? target.indexHistory : [];
+    const remaining = currentHistory.filter(h => h.id !== readingId);
     
-    // Recalcule le currentIndex à partir du relevé le plus récent restant
-    const sorted = [...newHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    const latest = sorted[0];
-    const newCurrentIndex = latest ? latest.index : target.currentIndex;
-    const newLastUpdateDate = latest ? latest.date : target.lastUpdateDate;
+    // Trier chronologiquement pour recalculer les deltas entre relevés restants
+    const sortedChronological = [...remaining].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    const recalculatedHistory: IndexReading[] = sortedChronological.map((item, idx) => {
+      if (idx === 0) {
+        const { differenceHours, daysElapsed, dailyAverage, ...rest } = item;
+        return rest as IndexReading;
+      }
+      const prev = sortedChronological[idx - 1];
+      const diffHours = item.index - prev.index;
+      const msDiff = Math.abs(new Date(item.date).getTime() - new Date(prev.date).getTime());
+      const daysDiff = Math.max(0.1, msDiff / (1000 * 60 * 60 * 24));
+      const dailyAvg = diffHours > 0 && daysDiff > 0 ? parseFloat((diffHours / daysDiff).toFixed(1)) : undefined;
+      return {
+        ...item,
+        differenceHours: diffHours,
+        daysElapsed: Math.round(daysDiff * 10) / 10,
+        ...(dailyAvg !== undefined ? { dailyAverage: dailyAvg } : {})
+      };
+    });
+
+    // Tri par date décroissante (plus récent d'abord pour l'affichage)
+    const newHistory = [...recalculatedHistory]
+      .map(item => sanitizeForFirestore(item))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // Détermine le nouvel index actuel et la date du dernier relevé
+    let newCurrentIndex: number;
+    let newLastUpdateDate: string;
+
+    if (newHistory.length > 0) {
+      newCurrentIndex = newHistory[0].index;
+      newLastUpdateDate = newHistory[0].date;
+    } else {
+      newCurrentIndex = target.lastChangeIndex ?? 0;
+      newLastUpdateDate = target.lastChangeDate || new Date().toISOString();
+    }
 
     const updatedRecord: MaintenanceRecord = {
       ...target,
@@ -864,14 +913,125 @@ const App: React.FC = () => {
 
     try {
       // Met à jour exclusivement les relevés sans toucher aux autres données
-      await updateDoc(doc(db, 'records', recordId), {
+      const updatePayload = sanitizeForFirestore({
         currentIndex: newCurrentIndex,
         lastUpdateDate: newLastUpdateDate,
         indexHistory: newHistory
       });
+
+      await updateDoc(doc(db, 'records', recordId), updatePayload);
       await checkMaintenanceApproaching(updatedRecord);
     } catch (err) {
       console.error("Erreur suppression relevé index:", err);
+      handleFirestoreError(err, OperationType.WRITE, 'records');
+    }
+  };
+
+  const handleClearIndexHistory = async (recordId: string) => {
+    const target = records.find(r => r.id === recordId);
+    if (!target) return;
+
+    const newCurrentIndex = target.lastChangeIndex ?? 0;
+    const newLastUpdateDate = target.lastChangeDate || new Date().toISOString();
+
+    const updatedRecord: MaintenanceRecord = {
+      ...target,
+      currentIndex: newCurrentIndex,
+      lastUpdateDate: newLastUpdateDate,
+      indexHistory: []
+    };
+
+    setRecords(prev => prev.map(r => r.id === recordId ? updatedRecord : r));
+
+    try {
+      const updatePayload = sanitizeForFirestore({
+        currentIndex: newCurrentIndex,
+        lastUpdateDate: newLastUpdateDate,
+        indexHistory: []
+      });
+
+      await updateDoc(doc(db, 'records', recordId), updatePayload);
+      await checkMaintenanceApproaching(updatedRecord);
+    } catch (err) {
+      console.error("Erreur réinitialisation historique index:", err);
+      handleFirestoreError(err, OperationType.WRITE, 'records');
+    }
+  };
+
+  const handleUpdateIndexReading = async (
+    recordId: string,
+    readingId: string,
+    readingData: { date: string; index: number; notes?: string }
+  ) => {
+    const target = records.find(r => r.id === recordId);
+    if (!target) return;
+
+    const currentHistory = Array.isArray(target.indexHistory) ? target.indexHistory : [];
+    const cleanIndex = Math.max(0, Math.round(readingData.index));
+    const readingDate = readingData.date ? new Date(readingData.date).toISOString() : new Date().toISOString();
+
+    const updatedRaw = currentHistory.map(item => {
+      if (item.id !== readingId) return item;
+      const updated: IndexReading = {
+        ...item,
+        date: readingDate,
+        index: cleanIndex
+      };
+      if (readingData.notes?.trim()) {
+        updated.notes = readingData.notes.trim();
+      } else {
+        delete updated.notes;
+      }
+      return updated;
+    });
+
+    const sortedChronological = [...updatedRaw].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const recalculatedHistory: IndexReading[] = sortedChronological.map((item, idx) => {
+      if (idx === 0) {
+        const { differenceHours, daysElapsed, dailyAverage, ...rest } = item;
+        return rest as IndexReading;
+      }
+      const prev = sortedChronological[idx - 1];
+      const diffHours = item.index - prev.index;
+      const msDiff = Math.abs(new Date(item.date).getTime() - new Date(prev.date).getTime());
+      const daysDiff = Math.max(0.1, msDiff / (1000 * 60 * 60 * 24));
+      const dailyAvg = diffHours > 0 && daysDiff > 0 ? parseFloat((diffHours / daysDiff).toFixed(1)) : undefined;
+      return {
+        ...item,
+        differenceHours: diffHours,
+        daysElapsed: Math.round(daysDiff * 10) / 10,
+        ...(dailyAvg !== undefined ? { dailyAverage: dailyAvg } : {})
+      };
+    });
+
+    const newHistory = [...recalculatedHistory]
+      .map(item => sanitizeForFirestore(item))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const latest = newHistory[0];
+    const newCurrentIndex = latest ? latest.index : cleanIndex;
+    const newLastUpdateDate = latest ? latest.date : readingDate;
+
+    const updatedRecord: MaintenanceRecord = {
+      ...target,
+      currentIndex: newCurrentIndex,
+      lastUpdateDate: newLastUpdateDate,
+      indexHistory: newHistory
+    };
+
+    setRecords(prev => prev.map(r => r.id === recordId ? updatedRecord : r));
+
+    try {
+      const updatePayload = sanitizeForFirestore({
+        currentIndex: newCurrentIndex,
+        lastUpdateDate: newLastUpdateDate,
+        indexHistory: newHistory
+      });
+
+      await updateDoc(doc(db, 'records', recordId), updatePayload);
+      await checkMaintenanceApproaching(updatedRecord);
+    } catch (err) {
+      console.error("Erreur modification relevé index:", err);
       handleFirestoreError(err, OperationType.WRITE, 'records');
     }
   };
@@ -911,13 +1071,15 @@ const App: React.FC = () => {
 
     try {
       // Met à jour EXCLUSIVEMENT les quantités de consommables et la date, sans altérer aucune autre donnée
-      await updateDoc(doc(db, 'records', recordId), {
+      const updatePayload = sanitizeForFirestore({
         fuelFilterQuantity: cleanFuelQty,
         oilFilterQuantity: cleanOilFilterQty,
         separatorQuantity: cleanSeparatorQty,
         oilQuantity: cleanOilQty,
         lastUpdateDate: now
       });
+
+      await updateDoc(doc(db, 'records', recordId), updatePayload);
     } catch (err) {
       console.error("Erreur mise à jour quantités consommables:", err);
       handleFirestoreError(err, OperationType.WRITE, 'records');
@@ -977,11 +1139,12 @@ const App: React.FC = () => {
         const record = records.find(r => r.id === recordId);
         if (record) {
           const updatedInterventions = record.interventions.filter(i => !ids.includes(i.id));
-          setRecords(prev => prev.map(r => r.id === recordId ? { ...r, interventions: updatedInterventions } : r));
+          const cleanInterventions = sanitizeForFirestore(updatedInterventions);
+          setRecords(prev => prev.map(r => r.id === recordId ? { ...r, interventions: cleanInterventions } : r));
           if (previewDoc && previewDoc.record.id === recordId) {
-            setPreviewDoc(prev => prev ? { ...prev, record: { ...prev.record, interventions: updatedInterventions } } : null);
+            setPreviewDoc(prev => prev ? { ...prev, record: { ...prev.record, interventions: cleanInterventions } } : null);
           }
-          await updateDoc(doc(db, 'records', recordId), { interventions: updatedInterventions });
+          await updateDoc(doc(db, 'records', recordId), { interventions: cleanInterventions });
         }
       } else if (type === 'all_interventions' && recordId) {
         if (appUser?.role !== 'admin') {
@@ -1122,7 +1285,8 @@ const App: React.FC = () => {
     } as any;
 
     try {
-      await setDoc(doc(db, 'archives', id), newDoc);
+      const sanitizedDoc = sanitizeForFirestore(newDoc);
+      await setDoc(doc(db, 'archives', id), sanitizedDoc);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'archives');
     }
@@ -2303,6 +2467,8 @@ const App: React.FC = () => {
               onUpdateCurrentIndex={handleUpdateCurrentIndex}
               onSaveIndexReading={handleSaveIndexReading}
               onDeleteIndexReading={handleDeleteIndexReading}
+              onClearIndexHistory={handleClearIndexHistory}
+              onUpdateIndexReading={handleUpdateIndexReading}
               onUpdateConsumables={handleUpdateConsumablesQuantities}
             />
           )}
@@ -2323,6 +2489,8 @@ const App: React.FC = () => {
               onUpdateCurrentIndex={handleUpdateCurrentIndex}
               onSaveIndexReading={handleSaveIndexReading}
               onDeleteIndexReading={handleDeleteIndexReading}
+              onClearIndexHistory={handleClearIndexHistory}
+              onUpdateIndexReading={handleUpdateIndexReading}
               onUpdateConsumables={handleUpdateConsumablesQuantities}
             />
           )}

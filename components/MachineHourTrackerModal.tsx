@@ -8,6 +8,8 @@ interface Props {
   appUser: AppUser | null;
   onSaveReading: (recordId: string, reading: { date: string; index: number; notes?: string }) => Promise<void> | void;
   onDeleteReading?: (recordId: string, readingId: string) => Promise<void> | void;
+  onClearHistory?: (recordId: string) => Promise<void> | void;
+  onUpdateReading?: (recordId: string, readingId: string, reading: { date: string; index: number; notes?: string }) => Promise<void> | void;
 }
 
 export const MachineHourTrackerModal: React.FC<Props> = ({
@@ -15,7 +17,9 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
   onClose,
   appUser,
   onSaveReading,
-  onDeleteReading
+  onDeleteReading,
+  onClearHistory,
+  onUpdateReading
 }) => {
   // Helper to format ISO datetime for input type="datetime-local" in local time
   const getDefaultDateTimeLocal = () => {
@@ -28,11 +32,14 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
   const [dateInput, setDateInput] = useState<string>(getDefaultDateTimeLocal());
   const [indexInput, setIndexInput] = useState<string>((record.currentIndex ?? 0).toString());
   const [notesInput, setNotesInput] = useState<string>('');
+  const [editingReading, setEditingReading] = useState<IndexReading | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [readingToDelete, setReadingToDelete] = useState<IndexReading | null>(null);
   const [isDeletingReading, setIsDeletingReading] = useState(false);
+  const [showClearAllModal, setShowClearAllModal] = useState(false);
+  const [isClearingAll, setIsClearingAll] = useState(false);
 
   // Status for maintenance metrics
   const status = useMemo(() => calculateMaintenanceStatus(record), [record]);
@@ -65,6 +72,16 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
     return (deltaHours / days).toFixed(1);
   }, [hasValidNumber, deltaHours, latestReading, record.lastUpdateDate, dateInput]);
 
+  // Projected machine index if the selected reading is deleted
+  const projectedIndexAfterDelete = useMemo(() => {
+    if (!readingToDelete) return record.currentIndex ?? 0;
+    const remaining = sortedHistory.filter(h => h.id !== readingToDelete.id);
+    if (remaining.length > 0) {
+      return remaining[0].index;
+    }
+    return record.lastChangeIndex ?? 0;
+  }, [readingToDelete, sortedHistory, record.currentIndex, record.lastChangeIndex]);
+
   // Format date readable in French
   const formatDateReadable = (isoString?: string) => {
     if (!isoString) return 'Date inconnue';
@@ -82,6 +99,35 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
     }
   };
 
+  const handleStartEdit = (item: IndexReading) => {
+    setEditingReading(item);
+    try {
+      const d = new Date(item.date);
+      const offset = d.getTimezoneOffset();
+      const local = new Date(d.getTime() - offset * 60 * 1000);
+      setDateInput(local.toISOString().slice(0, 16));
+    } catch {
+      setDateInput(getDefaultDateTimeLocal());
+    }
+    setIndexInput(item.index.toString());
+    setNotesInput(item.notes || '');
+    setErrorMessage('');
+    setSuccessMessage('');
+    // Scroll to the form
+    const formElement = document.getElementById('index-form-container');
+    if (formElement) {
+      formElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingReading(null);
+    setDateInput(getDefaultDateTimeLocal());
+    setIndexInput((record.currentIndex ?? 0).toString());
+    setNotesInput('');
+    setErrorMessage('');
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!hasValidNumber || parsedIndex < 0) {
@@ -92,17 +138,29 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
     setIsSubmitting(true);
     setErrorMessage('');
     try {
-      await onSaveReading(record.id, {
-        date: dateInput ? new Date(dateInput).toISOString() : new Date().toISOString(),
-        index: parsedIndex,
-        notes: notesInput.trim() || undefined
-      });
+      if (editingReading && onUpdateReading) {
+        // Mode modification / correction d'erreur
+        await onUpdateReading(record.id, editingReading.id, {
+          date: dateInput ? new Date(dateInput).toISOString() : new Date().toISOString(),
+          index: parsedIndex,
+          ...(notesInput.trim() ? { notes: notesInput.trim() } : {})
+        });
+        setSuccessMessage(`Relevé d'index corrigé avec succès (${formatNumber(parsedIndex)} h).`);
+        setEditingReading(null);
+      } else {
+        // Mode ajout d'un nouveau relevé
+        await onSaveReading(record.id, {
+          date: dateInput ? new Date(dateInput).toISOString() : new Date().toISOString(),
+          index: parsedIndex,
+          ...(notesInput.trim() ? { notes: notesInput.trim() } : {})
+        });
+        setSuccessMessage(`Relevé d'index enregistré avec succès (${formatNumber(parsedIndex)} h).`);
+      }
 
-      setSuccessMessage(`Relevé d'index enregistré avec succès (${formatNumber(parsedIndex)} h).`);
       setNotesInput('');
       setTimeout(() => {
         setSuccessMessage('');
-      }, 2500);
+      }, 3000);
     } catch (err: any) {
       console.error("Erreur enregistrement relevé:", err);
       setErrorMessage(err?.message || "Erreur lors de l'enregistrement du relevé.");
@@ -114,16 +172,41 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
   const handleConfirmDeleteReading = async () => {
     if (!readingToDelete || !onDeleteReading) return;
     setIsDeletingReading(true);
+    setErrorMessage('');
     try {
       await onDeleteReading(record.id, readingToDelete.id);
+      
+      // Si l'utilisateur était en train d'éditer ce même relevé, réinitialiser le formulaire
+      if (editingReading && editingReading.id === readingToDelete.id) {
+        handleCancelEdit();
+      }
+
+      setSuccessMessage(`Relevé de ${formatNumber(readingToDelete.index)} h supprimé de l'historique avec succès. L'index machine a été réajusté sans altérer vos autres données.`);
       setReadingToDelete(null);
-      setSuccessMessage("Relevé d'index supprimé avec succès.");
-      setTimeout(() => setSuccessMessage(''), 2000);
+      setTimeout(() => setSuccessMessage(''), 3500);
     } catch (err: any) {
       console.error("Erreur suppression relevé:", err);
       setErrorMessage(err?.message || "Erreur lors de la suppression du relevé.");
     } finally {
       setIsDeletingReading(false);
+    }
+  };
+
+  const handleConfirmClearAll = async () => {
+    if (!onClearHistory) return;
+    setIsClearingAll(true);
+    setErrorMessage('');
+    try {
+      await onClearHistory(record.id);
+      handleCancelEdit();
+      setShowClearAllModal(false);
+      setSuccessMessage("Historique des relevés réinitialisé. Toutes vos données techniques (filtres, huile, courroie, prix, client) sont restées intactes.");
+      setTimeout(() => setSuccessMessage(''), 3500);
+    } catch (err: any) {
+      console.error("Erreur réinitialisation historique:", err);
+      setErrorMessage(err?.message || "Erreur lors de la réinitialisation de l'historique.");
+    } finally {
+      setIsClearingAll(false);
     }
   };
 
@@ -155,7 +238,7 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
 
   return (
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 my-auto animate-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 my-auto animate-in zoom-in-95 duration-200">
         
         {/* Header */}
         <div className="p-4 sm:p-6 bg-slate-900 text-white flex justify-between items-start shrink-0 border-b border-slate-800">
@@ -186,7 +269,7 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
           <button 
             type="button"
             onClick={onClose}
-            className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all ml-2 shrink-0 active:scale-95"
+            className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all ml-2 shrink-0 active:scale-95 cursor-pointer"
             title="Fermer"
           >
             <i className="fas fa-times text-sm"></i>
@@ -248,7 +331,7 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
               </div>
               <div className="my-2">
                 <div className="text-3xl font-black text-slate-900 font-mono">
-                  {sortedHistory.length} <span className="text-xs font-sans font-bold text-slate-400">enregistrés</span>
+                  {sortedHistory.length} <span className="text-xs font-sans font-bold text-slate-400">enregistré{sortedHistory.length > 1 ? 's' : ''}</span>
                 </div>
               </div>
               <div className="text-[10px] text-slate-500 font-medium flex items-center justify-between">
@@ -258,20 +341,42 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* Form to Record New Meter Index */}
-          <div className="bg-slate-50/90 rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-sm space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-2 border-b border-slate-200">
+          {/* Form to Record or Correct Meter Index */}
+          <div id="index-form-container" className={`rounded-2xl p-4 sm:p-5 border shadow-sm space-y-4 transition-all ${
+            editingReading ? 'bg-amber-50/70 border-amber-200' : 'bg-slate-50/90 border-slate-200/90'
+          }`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
               <div className="flex items-center space-x-2">
-                <div className="w-7 h-7 rounded-lg bg-[#2185D0] text-white flex items-center justify-center text-xs">
-                  <i className="fas fa-plus"></i>
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs text-white ${
+                  editingReading ? 'bg-amber-600' : 'bg-[#2185D0]'
+                }`}>
+                  <i className={editingReading ? "fas fa-edit" : "fas fa-plus"}></i>
                 </div>
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">
-                  Enregistrer un Nouveau Relevé d'Heures
-                </h3>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">
+                    {editingReading ? "Corriger un Relevé d'Heures (Mode Modification)" : "Enregistrer un Nouveau Relevé d'Heures"}
+                  </h3>
+                  {editingReading && (
+                    <p className="text-[11px] text-amber-800 font-medium">
+                      Correction en cours du relevé de {formatNumber(editingReading.index)} h du {formatDateReadable(editingReading.date)}
+                    </p>
+                  )}
+                </div>
               </div>
-              <span className="text-[11px] text-slate-500 font-medium">
-                Pour actualiser l'index et alimenter l'historique
-              </span>
+
+              {editingReading ? (
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="self-start sm:self-auto px-3 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                >
+                  <i className="fas fa-times mr-1"></i> Annuler la modification
+                </button>
+              ) : (
+                <span className="text-[11px] text-slate-500 font-medium">
+                  Pour actualiser l'index et alimenter l'historique
+                </span>
+              )}
             </div>
 
             <form onSubmit={handleSave} className="space-y-4">
@@ -291,7 +396,7 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
                     className="w-full bg-white border border-slate-300 focus:border-[#2185D0] focus:ring-2 focus:ring-[#2185D0]/20 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-900 focus:outline-none transition-all"
                   />
                   <p className="text-[10px] text-slate-400">
-                    Par défaut : date et heure actuelles (modifiable rétroactivement).
+                    Date et heure de constatation de l'horamètre de la machine.
                   </p>
                 </div>
 
@@ -305,7 +410,7 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={() => setIndexInput('')}
-                      className="text-[10px] text-[#2185D0] hover:text-[#1a6fb0] font-bold"
+                      className="text-[10px] text-[#2185D0] hover:text-[#1a6fb0] font-bold cursor-pointer"
                     >
                       Effacer
                     </button>
@@ -327,26 +432,28 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
                   </div>
 
                   {/* Quick increment buttons */}
-                  <div className="flex items-center space-x-1.5 pt-1">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase mr-1">Raccourcis :</span>
-                    {[10, 24, 50, 100].map(val => (
-                      <button
-                        key={val}
-                        type="button"
-                        onClick={() => {
-                          const base = hasValidNumber ? parsedIndex : baselineIndex;
-                          setIndexInput((base + val).toString());
-                        }}
-                        className="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-mono font-bold rounded-md transition-colors"
-                      >
-                        +{val}h
-                      </button>
-                    ))}
-                  </div>
+                  {!editingReading && (
+                    <div className="flex items-center space-x-1.5 pt-1">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase mr-1">Raccourcis :</span>
+                      {[10, 24, 50, 100].map(val => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => {
+                            const base = hasValidNumber ? parsedIndex : baselineIndex;
+                            setIndexInput((base + val).toString());
+                          }}
+                          className="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-mono font-bold rounded-md transition-colors cursor-pointer"
+                        >
+                          +{val}h
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Real-time Dynamic Feedback on hours difference */}
+              {/* Dynamic Feedback on hours difference */}
               {hasValidNumber && (
                 <div className="p-3 rounded-xl border text-xs">
                   {deltaHours > 0 ? (
@@ -367,7 +474,7 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
                     <div className="flex items-start space-x-2 text-amber-900 bg-amber-50 border-amber-200 p-2.5 rounded-lg">
                       <i className="fas fa-wrench text-amber-600 mt-0.5 shrink-0"></i>
                       <div className="text-[11px]">
-                        <strong>Correction d'index détectée :</strong> La valeur saisie ({formatNumber(parsedIndex)} h) est inférieure à l'index enregistré ({formatNumber(baselineIndex)} h). Cette rectification de frappe ou changement d'horamètre sera archivée sans corrompre vos autres données.
+                        <strong>Correction d'index détectée :</strong> La valeur saisie ({formatNumber(parsedIndex)} h) est inférieure à l'index enregistré ({formatNumber(baselineIndex)} h). Cette rectification sera consignée sans corrompre vos autres données.
                       </div>
                     </div>
                   ) : (
@@ -398,7 +505,7 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
               <div className="p-3 bg-blue-50/80 rounded-xl border border-blue-200/80 flex items-start space-x-2.5 text-[11px] text-slate-700">
                 <i className="fas fa-shield-alt text-[#2185D0] mt-0.5 text-sm shrink-0"></i>
                 <div className="leading-relaxed">
-                  <strong>Préservation stricte des données :</strong> Ce formulaire enregistre l'index horaire et sa date dans l'historique de cette machine. Vos données de maintenance (filtres, huile, courroie, prix, client, planning) ne sont jamais modifiées.
+                  <strong>Préservation stricte des données :</strong> Ce module enregistre et gère l'historique de l'horamètre. Vos données de maintenance (consommables, filtres, huile, courroie, prix, client, planning, interventions) restent 100% intactes et ne sont jamais modifiées.
                 </div>
               </div>
 
@@ -419,20 +526,34 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
 
               {/* Submit button */}
               <div className="flex items-center justify-end space-x-3 pt-1">
+                {editingReading && (
+                  <button
+                    type="button"
+                    onClick={handleCancelEdit}
+                    disabled={isSubmitting}
+                    className="px-4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                  >
+                    Annuler
+                  </button>
+                )}
                 <button
                   type="submit"
                   disabled={isSubmitting || !hasValidNumber}
-                  className="px-5 py-3 bg-[#2185D0] hover:bg-[#1a6fb0] disabled:opacity-50 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md shadow-[#2185D0]/20 transition-all flex items-center space-x-2 active:scale-95"
+                  className={`px-5 py-3 font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center space-x-2 active:scale-95 cursor-pointer disabled:opacity-50 ${
+                    editingReading 
+                      ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-200' 
+                      : 'bg-[#2185D0] hover:bg-[#1a6fb0] text-white shadow-[#2185D0]/20'
+                  }`}
                 >
                   {isSubmitting ? (
                     <>
                       <i className="fas fa-spinner fa-spin text-xs"></i>
-                      <span>Enregistrement du relevé...</span>
+                      <span>{editingReading ? "Mise à jour en cours..." : "Enregistrement du relevé..."}</span>
                     </>
                   ) : (
                     <>
-                      <i className="fas fa-check text-xs"></i>
-                      <span>Valider & Enregistrer ce Relevé</span>
+                      <i className={editingReading ? "fas fa-check-double text-xs" : "fas fa-check text-xs"}></i>
+                      <span>{editingReading ? "Valider la Correction" : "Valider & Enregistrer ce Relevé"}</span>
                     </>
                   )}
                 </button>
@@ -447,22 +568,40 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
                 <div className="w-7 h-7 rounded-lg bg-slate-800 text-white flex items-center justify-center text-xs">
                   <i className="fas fa-history"></i>
                 </div>
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">
-                  Historique Complet des Index & Relevés d'Heures
-                </h3>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">
+                    Historique Complet des Index & Relevés d'Heures
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Supprimez ou corrigez un relevé erroné sans altérer les autres données de la machine.
+                  </p>
+                </div>
               </div>
               
               {sortedHistory.length > 0 && (
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={handleExportCSV}
-                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors"
+                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors cursor-pointer"
                     title="Télécharger l'historique en fichier CSV"
                   >
                     <i className="fas fa-file-csv text-emerald-600"></i>
                     <span>Exporter CSV</span>
                   </button>
+
+                  {onClearHistory && (
+                    <button
+                      type="button"
+                      onClick={() => setShowClearAllModal(true)}
+                      className="inline-flex items-center space-x-1 px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors cursor-pointer"
+                      title="Vider tous les relevés d'index de cette machine"
+                    >
+                      <i className="fas fa-broom text-red-500 text-xs"></i>
+                      <span>Vider l'historique</span>
+                    </button>
+                  )}
+
                   <span className="text-[10px] font-black font-mono bg-slate-200/80 text-slate-700 px-2.5 py-1 rounded-full">
                     {sortedHistory.length} entrée{sortedHistory.length > 1 ? 's' : ''}
                   </span>
@@ -472,85 +611,189 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
 
             {/* List or Table */}
             {sortedHistory.length > 0 ? (
-              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-                <div className="overflow-x-auto scrollbar-thin">
-                  <table className="w-full text-left border-collapse min-w-[620px]">
-                    <thead>
-                      <tr className="bg-slate-50 text-slate-500 text-[9px] uppercase font-black tracking-wider border-b border-slate-200">
-                        <th className="px-4 py-3">Date & Heure</th>
-                        <th className="px-4 py-3">Index (Heures)</th>
-                        <th className="px-4 py-3">Évolution</th>
-                        <th className="px-4 py-3">Cadence</th>
-                        <th className="px-4 py-3">Auteur</th>
-                        <th className="px-4 py-3">Notes</th>
-                        {onDeleteReading && (appUser?.role === 'admin' || appUser?.role === 'technician') && (
-                          <th className="px-3 py-3 text-right">Action</th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-xs font-medium">
-                      {sortedHistory.map((item, idx) => (
-                        <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
-                          <td className="px-4 py-3 font-mono font-bold text-slate-700 whitespace-nowrap">
-                            <div className="flex items-center space-x-1.5">
-                              {idx === 0 && (
-                                <span className="w-2 h-2 rounded-full bg-emerald-500" title="Dernier relevé enregistré"></span>
-                              )}
-                              <span>{formatDateReadable(item.date)}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 font-mono font-black text-slate-900 whitespace-nowrap text-sm">
-                            {formatNumber(item.index)} <span className="text-[10px] text-slate-400 font-sans">h</span>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {item.differenceHours !== undefined ? (
-                              item.differenceHours > 0 ? (
-                                <span className="inline-flex items-center font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-mono text-[11px] border border-emerald-200/60">
-                                  +{formatNumber(item.differenceHours)} h
-                                </span>
-                              ) : item.differenceHours < 0 ? (
-                                <span className="inline-flex items-center font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full font-mono text-[11px] border border-amber-200/60">
-                                  {formatNumber(item.differenceHours)} h
-                                </span>
-                              ) : (
-                                <span className="text-slate-400 font-mono text-[11px]">0 h</span>
-                              )
-                            ) : (
-                              <span className="text-slate-300 font-mono">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-[11px] font-mono text-slate-600">
-                            {item.dailyAverage !== undefined ? (
-                              <span>~{item.dailyAverage} h/j</span>
-                            ) : (
-                              <span className="text-slate-300">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-slate-600 text-[11px] truncate max-w-[140px]" title={item.recordedBy}>
-                            <div className="flex items-center space-x-1">
-                              <i className="fas fa-user-circle text-slate-400 text-xs"></i>
-                              <span className="truncate">{item.recordedBy || 'Non spécifié'}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-slate-500 text-[11px] italic max-w-[180px] truncate" title={item.notes}>
-                            {item.notes || '—'}
-                          </td>
-                          {onDeleteReading && (appUser?.role === 'admin' || appUser?.role === 'technician') && (
-                            <td className="px-3 py-3 text-right">
-                              <button
-                                type="button"
-                                onClick={() => setReadingToDelete(item)}
-                                className="w-7 h-7 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors inline-flex items-center justify-center"
-                                title="Supprimer ce relevé"
-                              >
-                                <i className="fas fa-trash-alt text-[10px]"></i>
-                              </button>
-                            </td>
-                          )}
+              <div className="space-y-3">
+                {/* 1. Desktop & Tablet Table (Hidden on small mobile screens) */}
+                <div className="hidden md:block bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+                  <div className="overflow-x-auto scrollbar-thin">
+                    <table className="w-full text-left border-collapse min-w-[700px]">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-500 text-[9px] uppercase font-black tracking-wider border-b border-slate-200">
+                          <th className="px-4 py-3">Date & Heure</th>
+                          <th className="px-4 py-3">Index (Heures)</th>
+                          <th className="px-4 py-3">Évolution</th>
+                          <th className="px-4 py-3">Cadence</th>
+                          <th className="px-4 py-3">Auteur</th>
+                          <th className="px-4 py-3">Notes</th>
+                          <th className="px-4 py-3 text-right">Actions en cas d'erreur</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-xs font-medium">
+                        {sortedHistory.map((item, idx) => (
+                          <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="px-4 py-3 font-mono font-bold text-slate-700 whitespace-nowrap">
+                              <div className="flex items-center space-x-1.5">
+                                {idx === 0 && (
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500" title="Dernier relevé enregistré"></span>
+                                )}
+                                <span>{formatDateReadable(item.date)}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 font-mono font-black text-slate-900 whitespace-nowrap text-sm">
+                              {formatNumber(item.index)} <span className="text-[10px] text-slate-400 font-sans">h</span>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              {item.differenceHours !== undefined ? (
+                                item.differenceHours > 0 ? (
+                                  <span className="inline-flex items-center font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-mono text-[11px] border border-emerald-200/60">
+                                    +{formatNumber(item.differenceHours)} h
+                                  </span>
+                                ) : item.differenceHours < 0 ? (
+                                  <span className="inline-flex items-center font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full font-mono text-[11px] border border-amber-200/60">
+                                    {formatNumber(item.differenceHours)} h
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400 font-mono text-[11px]">0 h</span>
+                                )
+                              ) : (
+                                <span className="text-slate-300 font-mono">—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-[11px] font-mono text-slate-600">
+                              {item.dailyAverage !== undefined ? (
+                                <span>~{item.dailyAverage} h/j</span>
+                              ) : (
+                                <span className="text-slate-300">—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-slate-600 text-[11px] truncate max-w-[130px]" title={item.recordedBy}>
+                              <div className="flex items-center space-x-1">
+                                <i className="fas fa-user-circle text-slate-400 text-xs"></i>
+                                <span className="truncate">{item.recordedBy || 'Non spécifié'}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-slate-500 text-[11px] italic max-w-[170px] truncate" title={item.notes}>
+                              {item.notes || '—'}
+                            </td>
+                            <td className="px-4 py-3 text-right whitespace-nowrap">
+                              <div className="inline-flex items-center space-x-1.5 justify-end">
+                                {onUpdateReading && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStartEdit(item)}
+                                    className="px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold transition-colors inline-flex items-center space-x-1 cursor-pointer"
+                                    title="Corriger la valeur de ce relevé"
+                                  >
+                                    <i className="fas fa-pen text-[10px]"></i>
+                                    <span>Corriger</span>
+                                  </button>
+                                )}
+                                {onDeleteReading && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setReadingToDelete(item)}
+                                    className="px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-[11px] font-bold transition-colors inline-flex items-center space-x-1 cursor-pointer"
+                                    title="Supprimer ce relevé erroné"
+                                  >
+                                    <i className="fas fa-trash-alt text-[10px]"></i>
+                                    <span>Supprimer</span>
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* 2. Mobile Card View (Optimized for phones without horizontal scroll) */}
+                <div className="md:hidden space-y-2.5">
+                  {sortedHistory.map((item, idx) => (
+                    <div 
+                      key={item.id} 
+                      className={`p-3.5 bg-white rounded-2xl border shadow-xs transition-all space-y-2.5 ${
+                        idx === 0 ? 'border-emerald-200 ring-1 ring-emerald-100' : 'border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          {idx === 0 && (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-black uppercase tracking-wider">
+                              Dernier Relevé
+                            </span>
+                          )}
+                          <span className="font-mono text-xs font-bold text-slate-700">
+                            {formatDateReadable(item.date)}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-mono font-black text-slate-900 text-base">
+                            {formatNumber(item.index)} <span className="text-xs font-sans text-slate-400">h</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                        {item.differenceHours !== undefined && (
+                          item.differenceHours > 0 ? (
+                            <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-mono text-[10px] border border-emerald-200/60">
+                              +{formatNumber(item.differenceHours)} h
+                            </span>
+                          ) : item.differenceHours < 0 ? (
+                            <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md font-mono text-[10px] border border-amber-200/60">
+                              {formatNumber(item.differenceHours)} h
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-mono text-[10px]">0 h</span>
+                          )
+                        )}
+
+                        {item.dailyAverage !== undefined && (
+                          <span className="text-slate-500 font-mono text-[10px] bg-slate-100 px-2 py-0.5 rounded-md">
+                            ~{item.dailyAverage} h/jour
+                          </span>
+                        )}
+
+                        {item.recordedBy && (
+                          <span className="text-slate-400 text-[10px] flex items-center space-x-1">
+                            <i className="fas fa-user-circle text-[9px]"></i>
+                            <span>{item.recordedBy}</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {item.notes && (
+                        <p className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded-lg italic">
+                          "{item.notes}"
+                        </p>
+                      )}
+
+                      {/* Action buttons on mobile */}
+                      <div className="flex items-center space-x-2 pt-1 border-t border-slate-100">
+                        {onUpdateReading && (
+                          <button
+                            type="button"
+                            onClick={() => handleStartEdit(item)}
+                            className="flex-1 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
+                          >
+                            <i className="fas fa-pen text-[10px]"></i>
+                            <span>Corriger</span>
+                          </button>
+                        )}
+                        {onDeleteReading && (
+                          <button
+                            type="button"
+                            onClick={() => setReadingToDelete(item)}
+                            className="flex-1 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-xl transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
+                          >
+                            <i className="fas fa-trash-alt text-[10px]"></i>
+                            <span>Supprimer</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ) : (
@@ -580,7 +823,7 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
           <button
             type="button"
             onClick={onClose}
-            className="w-full sm:w-auto px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all"
+            className="w-full sm:w-auto px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer"
           >
             Fermer
           </button>
@@ -590,28 +833,48 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
 
       {/* Confirmation Modal to Delete an Index Reading */}
       {readingToDelete && (
-        <div className="fixed inset-0 bg-slate-950/80 z-[60] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95">
-            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto text-lg">
-              <i className="fas fa-exclamation-triangle"></i>
+        <div className="fixed inset-0 bg-slate-950/80 z-[60] flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95">
+            <div className="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto text-xl shadow-inner">
+              <i className="fas fa-trash-alt"></i>
             </div>
-            <div className="text-center space-y-1">
-              <h4 className="font-black text-slate-900 text-base uppercase">
-                Supprimer ce Relevé ?
+            <div className="text-center space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-red-600 block">
+                Suppression d'un relevé d'index
+              </span>
+              <h4 className="font-black text-slate-900 text-lg uppercase">
+                Supprimer ce Relevé en Erreur ?
               </h4>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Êtes-vous sûr de vouloir supprimer le relevé d'index de <strong>{formatNumber(readingToDelete.index)} h</strong> du {formatDateReadable(readingToDelete.date)} ?
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Êtes-vous sûr de vouloir supprimer le relevé d'index de <strong className="text-slate-900 font-mono font-black">{formatNumber(readingToDelete.index)} h</strong> consigné le <span className="font-bold">{formatDateReadable(readingToDelete.date)}</span> ?
               </p>
-              <p className="text-[11px] text-emerald-700 bg-emerald-50 p-2 rounded-xl border border-emerald-100 mt-2 font-medium">
-                Cette suppression ne modifie aucune autre donnée technique de la machine.
-              </p>
+
+              {/* Notice of new machine index */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-1 text-left">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Ajustement de l'index :</span>
+                  <span className="font-mono font-bold text-slate-900">{formatNumber(projectedIndexAfterDelete)} h</span>
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  L'index actuel de la machine sera automatiquement réajusté sur le relevé valide restant le plus récent.
+                </p>
+              </div>
+
+              {/* Strict integrity guarantee */}
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-[11px] text-emerald-800 text-left flex items-start space-x-2">
+                <i className="fas fa-shield-alt text-emerald-600 mt-0.5 shrink-0 text-sm"></i>
+                <div className="leading-snug">
+                  <strong>Sécurité garantie :</strong> Seul ce relevé horaire sera effacé. Vos autres données (interventions passées, filtres, huile, courroies, prix, client, devis/factures) restent 100% préservées.
+                </div>
+              </div>
             </div>
+
             <div className="flex items-center space-x-2 pt-2">
               <button
                 type="button"
                 onClick={() => setReadingToDelete(null)}
                 disabled={isDeletingReading}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase rounded-xl transition-colors"
+                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-wider rounded-xl transition-colors cursor-pointer"
               >
                 Annuler
               </button>
@@ -619,12 +882,78 @@ export const MachineHourTrackerModal: React.FC<Props> = ({
                 type="button"
                 onClick={handleConfirmDeleteReading}
                 disabled={isDeletingReading}
-                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase rounded-xl transition-colors shadow-sm flex items-center justify-center space-x-1.5"
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-colors shadow-md shadow-red-200 flex items-center justify-center space-x-1.5 cursor-pointer"
               >
                 {isDeletingReading ? (
-                  <i className="fas fa-spinner fa-spin text-xs"></i>
+                  <>
+                    <i className="fas fa-spinner fa-spin text-xs"></i>
+                    <span>Suppression...</span>
+                  </>
                 ) : (
-                  <span>Confirmer</span>
+                  <>
+                    <i className="fas fa-trash-alt text-xs"></i>
+                    <span>Confirmer la Suppression</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal to Clear All History */}
+      {showClearAllModal && (
+        <div className="fixed inset-0 bg-slate-950/80 z-[60] flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95">
+            <div className="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto text-xl shadow-inner">
+              <i className="fas fa-broom"></i>
+            </div>
+            <div className="text-center space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-red-600 block">
+                Réinitialisation globale des relevés
+              </span>
+              <h4 className="font-black text-slate-900 text-lg uppercase">
+                Vider l'Historique des Relevés ?
+              </h4>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Vous êtes sur le point d'effacer les <strong className="text-slate-900">{sortedHistory.length} relevé(s) d'index</strong> de cette machine ({record.customerName} - {record.model}).
+              </p>
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 text-left">
+                L'index actuel de la machine reviendra à l'index de départ (<strong>{formatNumber(record.lastChangeIndex ?? 0)} h</strong>).
+              </div>
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-[11px] text-emerald-800 text-left flex items-start space-x-2">
+                <i className="fas fa-check-circle text-emerald-600 mt-0.5 shrink-0 text-sm"></i>
+                <div className="leading-snug">
+                  <strong>Aucune autre donnée n'est affectée :</strong> Les interventions, fiches techniques et données de planning restent strictement préservées.
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowClearAllModal(false)}
+                disabled={isClearingAll}
+                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-wider rounded-xl transition-colors cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmClearAll}
+                disabled={isClearingAll}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-colors shadow-md shadow-red-200 flex items-center justify-center space-x-1.5 cursor-pointer"
+              >
+                {isClearingAll ? (
+                  <>
+                    <i className="fas fa-spinner fa-spin text-xs"></i>
+                    <span>Nettoyage...</span>
+                  </>
+                ) : (
+                  <>
+                    <i className="fas fa-trash-alt text-xs"></i>
+                    <span>Oui, Vider l'Historique</span>
+                  </>
                 )}
               </button>
             </div>
